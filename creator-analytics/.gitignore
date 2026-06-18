@@ -2,6 +2,7 @@
 data/browser/
 data/cookies/*.json
 data/logs/
+data/history/*.jsonl
 data/output/*.json
 data/output/*.md
 

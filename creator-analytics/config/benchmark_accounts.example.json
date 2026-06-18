@@ -1,0 +1,23 @@
+{
+  "accounts": [
+    {
+      "platform": "xhs",
+      "name": "示例小红书对标账号",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/example",
+      "enabled": false
+    },
+    {
+      "platform": "douyin",
+      "name": "示例抖音对标账号",
+      "profile_url": "https://www.douyin.com/user/example",
+      "enabled": false
+    },
+    {
+      "platform": "wechat",
+      "name": "示例公众号对标账号",
+      "profile_url": "https://mp.weixin.qq.com/s/example",
+      "enabled": false
+    }
+  ],
+  "note": "复制为 benchmark_accounts.json 后填写真实对标账号。首版仅保留配置位；未配置时日报会跳过外部对标。"
+}

@@ -1,5 +1,5 @@
 display_name: "创作者全链路复盘"
-short_description: "一键采集小红书/抖音内容数据，读取内容并生成下一期选题和文案思路"
-default_prompt: "统计昨天小红书和抖音发布内容的数据，读取内容并生成下一期选题和文案思路。"
+short_description: "一键采集小红书/抖音/公众号数据，诊断好差原因并生成下一期成稿思路"
+default_prompt: "统计昨天小红书、抖音和微信公众号发布内容的数据，分析为什么好或差、差在哪里、怎么提升，并生成下一期选题和文案思路。"
 brand_color: "#FF2442"
 allow_implicit_invocation: false

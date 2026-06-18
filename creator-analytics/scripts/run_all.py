@@ -3,7 +3,7 @@
 """
 创作者平台日报 — 主调度器
 
-按顺序执行小红书和抖音的数据采集，然后生成报告。
+按顺序执行小红书、抖音和微信公众号的数据采集，然后生成报告。
 """
 
 import argparse
@@ -23,7 +23,7 @@ def parse_args():
                         help="打开浏览器窗口（首次登录或 cookie 过期时使用）")
     parser.add_argument("--date", default=None,
                         help="目标日期 YYYY-MM-DD，默认昨天")
-    parser.add_argument("--platform", choices=["xhs", "douyin", "all"], default="all",
+    parser.add_argument("--platform", choices=["xhs", "douyin", "wechat", "all"], default="all",
                         help="采集指定平台，默认全部")
     parser.add_argument("--dry-run", action="store_true",
                         help="模拟运行，不实际采集")
@@ -87,7 +87,14 @@ def main():
     else:
         print("\n⏭️ 跳过抖音采集")
 
-    # 第三步: 生成报告
+    # 第三步: 采集微信公众号
+    if args.platform in ("wechat", "all"):
+        code = run_script("scrape_wechat.py", *common_args)
+        exit_codes["wechat"] = code
+    else:
+        print("\n⏭️ 跳过微信公众号采集")
+
+    # 第四步: 生成报告
     print(f"\n{'=' * 70}")
     print(f"📊 生成每日数据报告...")
     print(f"{'=' * 70}")
@@ -103,10 +110,12 @@ def main():
     status_map = {
         "xhs": "✅" if exit_codes.get("xhs") == 0 else "❌",
         "douyin": "✅" if exit_codes.get("douyin") == 0 else "❌",
+        "wechat": "✅" if exit_codes.get("wechat") == 0 else "❌",
         "report": "✅" if exit_codes.get("report") == 0 else "❌",
     }
     print(f"  小红书: {status_map.get('xhs', '⏭️')}")
     print(f"  抖音:   {status_map.get('douyin', '⏭️')}")
+    print(f"  公众号: {status_map.get('wechat', '⏭️')}")
     print(f"  报告:   {status_map.get('report', '⏭️')}")
     print(f"{'=' * 70}")
 
@@ -114,10 +123,10 @@ def main():
     report_path = output_dir() / f"report_{report_date}.md"
     print(f"\n📄 报告文件: {report_path}")
 
-    # 如果有失败，返回非零
-    failed = [k for k, v in exit_codes.items() if v != 0]
-    if failed:
-        print(f"\n⚠️ 以下步骤有异常: {', '.join(failed)}")
+    failed_collectors = [k for k, v in exit_codes.items() if k != "report" and v != 0]
+    if failed_collectors:
+        print(f"\n⚠️ 以下平台采集有异常，报告已按可用数据生成: {', '.join(failed_collectors)}")
+    if exit_codes.get("report") != 0:
         return 1
 
     print("\n🎉 全部完成！")

@@ -12,6 +12,9 @@ REQUIRED = [
     "run_all.py",
     "scrape_xhs.py",
     "scrape_douyin.py",
+    "scrape_wechat.py",
+    "analysis_engine.py",
+    "history_store.py",
     "generate_report.py",
     "paths.py",
 ]

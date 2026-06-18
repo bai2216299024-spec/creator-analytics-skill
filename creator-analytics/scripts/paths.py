@@ -18,6 +18,14 @@ def output_dir() -> Path:
     return data_dir() / "output"
 
 
+def history_dir() -> Path:
+    return data_dir() / "history"
+
+
+def config_dir() -> Path:
+    return SKILL_DIR / "config"
+
+
 def cookie_file(platform: str) -> Path:
     return data_dir() / "cookies" / f"{platform}_cookies.json"
 
