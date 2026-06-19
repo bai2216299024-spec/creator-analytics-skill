@@ -7,6 +7,7 @@
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import datetime
@@ -27,6 +28,8 @@ def parse_args():
                         help="采集指定平台，默认全部")
     parser.add_argument("--dry-run", action="store_true",
                         help="模拟运行，不实际采集")
+    parser.add_argument("--no-auto-login", action="store_true",
+                        help="检测到登录过期时不自动打开浏览器重试")
     return parser.parse_args()
 
 
@@ -54,11 +57,59 @@ def run_script(script_name: str, *extra_args) -> int:
     return result.returncode
 
 
+PLATFORM_OUTPUT_FILES = {
+    "xhs": "xhs_data.json",
+    "douyin": "douyin_data.json",
+    "wechat": "wechat_data.json",
+}
+
+
+LOGIN_ERROR_MARKERS = [
+    "登录",
+    "扫码",
+    "Cookie 已过期",
+    "登录态过期",
+    "--headed",
+    "重新登录",
+]
+
+
+def platform_requires_login(platform: str) -> bool:
+    """Return true when the latest platform output says visible login is required."""
+    filename = PLATFORM_OUTPUT_FILES.get(platform)
+    if not filename:
+        return False
+    path = output_dir() / filename
+    if not path.exists():
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    error = str(data.get("error") or "")
+    return any(marker in error for marker in LOGIN_ERROR_MARKERS)
+
+
+def run_platform(platform: str, script_name: str, common_args: list[str], auto_login: bool) -> int:
+    """Run one platform collector, retrying once with a visible browser if login is required."""
+    code = run_script(script_name, *common_args)
+    if code == 0 or not auto_login:
+        return code
+
+    if platform_requires_login(platform):
+        print(f"\n🔑 {platform} 需要登录，自动打开浏览器重试。请在浏览器中扫码/完成登录。")
+        headed_args = list(common_args)
+        if "--headed" not in headed_args:
+            headed_args.append("--headed")
+        return run_script(script_name, *headed_args)
+
+    return code
+
+
 def main():
     args = parse_args()
     report_date = target_date(args.date)
-    headless = not args.headed
-
     print(f"{'=' * 70}")
     print(f"  创作者平台日报 — 数据采集与报告")
     print(f"  目标日期: {report_date}")
@@ -70,26 +121,27 @@ def main():
         common_args.append("--headed")
     if args.dry_run:
         common_args.append("--dry-run")
+    auto_login = not args.headed and not args.dry_run and not args.no_auto_login
 
     exit_codes = {}
 
     # 第一步: 采集小红书
     if args.platform in ("xhs", "all"):
-        code = run_script("scrape_xhs.py", *common_args)
+        code = run_platform("xhs", "scrape_xhs.py", common_args, auto_login)
         exit_codes["xhs"] = code
     else:
         print("\n⏭️ 跳过小红书采集")
 
     # 第二步: 采集抖音
     if args.platform in ("douyin", "all"):
-        code = run_script("scrape_douyin.py", *common_args)
+        code = run_platform("douyin", "scrape_douyin.py", common_args, auto_login)
         exit_codes["douyin"] = code
     else:
         print("\n⏭️ 跳过抖音采集")
 
     # 第三步: 采集微信公众号
     if args.platform in ("wechat", "all"):
-        code = run_script("scrape_wechat.py", *common_args)
+        code = run_platform("wechat", "scrape_wechat.py", common_args, auto_login)
         exit_codes["wechat"] = code
     else:
         print("\n⏭️ 跳过微信公众号采集")

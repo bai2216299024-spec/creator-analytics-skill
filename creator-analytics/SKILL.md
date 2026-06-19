@@ -27,6 +27,8 @@ python scripts/one_click_review.py --headed
 python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 ```
 
+By default, if a collector detects expired login state during a normal non-headed run, the scheduler retries that platform once with a visible browser so the user can scan/login. Use `--no-auto-login` on `scripts/run_all.py` only when running in an environment where a browser must never open.
+
 For scheduled daily execution on Windows:
 
 ```powershell
@@ -122,7 +124,7 @@ First run on a new machine or new data directory may require:
 python scripts/one_click_review.py --headed
 ```
 
-After successful login, later runs should reuse the saved browser state.
+After successful login, later runs should reuse the saved browser state. If a later run detects expired login state, `run_all.py` will retry the failed platform once with `--headed` unless `--headed`, `--dry-run`, or `--no-auto-login` is already set.
 
 ## Validation
 
