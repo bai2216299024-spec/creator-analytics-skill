@@ -248,12 +248,48 @@ def diagnose_item(item: dict, baseline: dict) -> dict:
         "status": status,
         "score": score_item(item),
         "baseline": baseline,
+        "distribution": diagnose_distribution_for_item(item, baseline),
         "tags": sorted(set(tags)),
         "为什么差": bad_reasons,
         "差在哪里": compare_metrics(item, med),
         "如何提升": fixes,
         "为什么好": good_reasons,
         "如何固定下来": lock_patterns,
+    }
+
+
+def diagnose_distribution_for_item(item: dict, baseline: dict) -> dict:
+    views = metric(item, "views")
+    likes = metric(item, "likes")
+    comments = metric(item, "comments")
+    collects = metric(item, "collects")
+    wows = metric(item, "wows")
+    med = baseline.get("median", {})
+    base_views = med.get("views", 0)
+    base_interactions = med.get("likes", 0) + med.get("comments", 0) + med.get("collects", 0) + med.get("wows", 0)
+    interactions = likes + comments + collects + wows
+    view_ratio = views / base_views if base_views else 0
+    interaction_ratio = interactions / base_interactions if base_interactions else 0
+    interaction_rate = rate(interactions, views)
+
+    signals = []
+    evidence = []
+    if base_views and view_ratio <= 0.4 and (interaction_rate >= 0.08 or interaction_ratio >= 0.8):
+        signals.append("疑似初始推荐池未放量")
+        evidence.append("播放/阅读明显低于历史基准，但互动率或互动总量没有同步崩掉")
+    if base_views and view_ratio <= 0.4 and interaction_ratio < 0.4:
+        signals.append("内容入口与互动双弱")
+        evidence.append("播放/阅读和互动都明显低于历史基准，更像选题/标题/开头没有过初筛")
+    if views == 0 and interactions > 0:
+        signals.append("采集或平台展示异常")
+        evidence.append("互动存在但播放/阅读为 0，需要优先复核平台后台数据")
+
+    return {
+        "view_ratio": round(view_ratio, 3) if base_views else None,
+        "interaction_ratio": round(interaction_ratio, 3) if base_interactions else None,
+        "interaction_rate": round(interaction_rate, 4) if views else 0,
+        "signals": signals,
+        "evidence": evidence,
     }
 
 
@@ -342,6 +378,87 @@ def build_next_content(items: list[dict], diagnostics: list[dict]) -> dict:
     }
 
 
+def build_distribution_diagnosis(items: list[dict], diagnostics: list[dict]) -> dict:
+    if not diagnostics:
+        return {
+            "section": "分发诊断",
+            "level": "none",
+            "signals": [],
+            "判断": ["三平台无新增可分析内容，不能判断是否限流或分发异常。"],
+            "证据": [],
+            "解决动作": ["继续发布并保持数据采集，等有新增内容后再判断。"],
+        }
+
+    signals = []
+    evidence = []
+    for diag in diagnostics:
+        distribution = diag.get("distribution") or {}
+        for signal in distribution.get("signals", []):
+            signals.append(signal)
+        for item_evidence in distribution.get("evidence", []):
+            evidence.append(f"{diag.get('platform')}「{diag.get('title')}」: {item_evidence}")
+
+    active_platforms = {diag.get("platform") for diag in diagnostics}
+    bad_platforms = {
+        diag.get("platform")
+        for diag in diagnostics
+        if diag.get("distribution", {}).get("view_ratio") is not None
+        and diag["distribution"]["view_ratio"] <= 0.4
+    }
+    weak_interaction_platforms = {
+        diag.get("platform")
+        for diag in diagnostics
+        if diag.get("distribution", {}).get("interaction_ratio") is not None
+        and diag["distribution"]["interaction_ratio"] < 0.4
+    }
+
+    if len(active_platforms) >= 2 and len(bad_platforms) == len(active_platforms):
+        signals.append("三平台同步低迷" if len(active_platforms) >= 3 else "多平台同步低迷")
+        evidence.append("多个平台同日播放/阅读都显著低于各自历史基准")
+
+    signals = sorted(set(signals))
+    if "三平台同步低迷" in signals or "多平台同步低迷" in signals:
+        level = "account"
+        if weak_interaction_platforms == active_platforms:
+            judgment = ["疑似账号/选题阶段异常：三平台入口和互动都弱，优先按选题风险或表达疲劳处理。"]
+        else:
+            judgment = ["疑似账号/选题阶段异常：多平台同时低于历史基准，先不要只怪单个平台算法。"]
+        actions = [
+            "进入账号恢复模式：连续 2-3 条降低表达风险，用更具体的生活案例替代抽象概念。",
+            "暂停同质标题和同质开头，下一条只测试一个变量：标题入口或前三秒场景。",
+            "减少玄学承诺，统一改成国学文化科普、传统思维方法、案例观察。",
+        ]
+    elif "疑似初始推荐池未放量" in signals:
+        level = "platform"
+        judgment = ["不是单纯内容差：低播放/阅读但互动不弱，说明内容可能有价值，只是初始推荐池没有放量。"]
+        actions = [
+            "同主题继续测试，不要立刻换大选题；改标题入口和开头场景。",
+            "下一条把概念解释改成具体错误、具体问题或生活冲突。",
+            "用小红书做收藏版承接，用抖音做案例版验证，用公众号做长文沉淀。",
+        ]
+    elif "内容入口与互动双弱" in signals:
+        level = "content"
+        judgment = ["更像内容入口和互动设计共同偏弱，不优先判断为限流。"]
+        actions = [
+            "换选题包装：标题前 12 个字必须出现对象、痛点或具体收益。",
+            "减少纯概念解释，改成“问题-案例-方法-提问”的结构。",
+            "下一条不要复用原封面/原开头，避免连续同质低表现。",
+        ]
+    else:
+        level = "normal"
+        judgment = ["未发现明确限流/分发异常信号，按常规内容优化处理。"]
+        actions = ["继续积累历史样本，重点观察下一条是否重复出现低播放高互动。"]
+
+    return {
+        "section": "分发诊断",
+        "level": level,
+        "signals": signals,
+        "判断": judgment,
+        "证据": evidence,
+        "解决动作": actions,
+    }
+
+
 def infer_topic(title: str, content: str) -> str:
     text = f"{title} {content}"
     for keyword in ("八卦", "三要", "取象", "起卦", "体用", "梅花易数"):
@@ -382,6 +499,7 @@ def analyze_daily_data(daily_data: dict[str, dict | None], history: list[dict], 
             "highest_comments": best_comments,
         },
         "content_diagnostics": diagnostics,
+        "distribution_diagnosis": build_distribution_diagnosis(items, diagnostics),
         "platform_summaries": platform_summaries(items, diagnostics),
         "cross_platform": build_cross_platform_summary(diagnostics),
         "next_content": build_next_content(items, diagnostics),

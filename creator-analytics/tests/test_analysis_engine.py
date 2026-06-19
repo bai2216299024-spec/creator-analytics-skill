@@ -119,6 +119,78 @@ class CreatorAnalyticsAnalysisTests(unittest.TestCase):
         self.assertIn("抖音", analysis["next_content"]["douyin"]["platform"])
         self.assertIn("公众号", analysis["next_content"]["wechat"]["platform"])
 
+    def test_distribution_diagnosis_detects_low_reach_high_engagement(self):
+        daily = {
+            "douyin": {
+                "platform": "抖音",
+                "date": "2026-06-18",
+                "items": [
+                    {
+                        "publish_date": "2026年06月18日 20:00",
+                        "title": "三要感应法案例：看到异常怎么判断？",
+                        "content": "具体案例内容",
+                        "content_type": "图文",
+                        "views": 30,
+                        "likes": 3,
+                        "comments": 4,
+                    }
+                ],
+            }
+        }
+        history = [
+            {
+                "platform": "抖音",
+                "content_type": "图文",
+                "publish_time": f"2026-06-{day:02d} 20:00",
+                "title": f"历史抖音 {day}",
+                "metrics": {"views": 300, "likes": 6, "comments": 1},
+            }
+            for day in range(1, 8)
+        ]
+
+        analysis = analyze_daily_data(daily, history, benchmark_config={})
+        distribution = analysis["distribution_diagnosis"]
+
+        self.assertEqual(distribution["level"], "platform")
+        self.assertIn("疑似初始推荐池未放量", distribution["signals"])
+        self.assertIn("不是单纯内容差", " ".join(distribution["判断"]))
+        self.assertIn("同主题继续测试", " ".join(distribution["解决动作"]))
+        self.assertIn("分发诊断", json.dumps(analysis, ensure_ascii=False))
+
+    def test_distribution_diagnosis_detects_cross_platform_slump(self):
+        daily = {
+            "xhs": {
+                "platform": "小红书",
+                "date": "2026-06-18",
+                "items": [{"publish_date": "2026-06-18 20:00", "title": "同主题小红书", "content_type": "图文/笔记", "views": 30, "likes": 0, "comments": 0, "collects": 0}],
+            },
+            "douyin": {
+                "platform": "抖音",
+                "date": "2026-06-18",
+                "items": [{"publish_date": "2026-06-18 20:00", "title": "同主题抖音", "content_type": "图文", "views": 20, "likes": 0, "comments": 0}],
+            },
+            "wechat": {
+                "platform": "微信公众号",
+                "date": "2026-06-18",
+                "items": [{"publish_date": "2026-06-18 20:00", "title": "同主题公众号", "content_type": "文章", "reads": 10, "likes": 0, "comments": 0, "wows": 0}],
+            },
+        }
+        history = []
+        for day in range(1, 8):
+            history.extend([
+                {"platform": "小红书", "content_type": "图文/笔记", "publish_time": f"2026-06-{day:02d}", "title": f"xhs {day}", "metrics": {"views": 300, "likes": 10, "comments": 2, "collects": 5}},
+                {"platform": "抖音", "content_type": "图文", "publish_time": f"2026-06-{day:02d}", "title": f"douyin {day}", "metrics": {"views": 400, "likes": 12, "comments": 2}},
+                {"platform": "微信公众号", "content_type": "文章", "publish_time": f"2026-06-{day:02d}", "title": f"wechat {day}", "metrics": {"views": 200, "likes": 5, "comments": 1, "wows": 2}},
+            ])
+
+        analysis = analyze_daily_data(daily, history, benchmark_config={})
+        distribution = analysis["distribution_diagnosis"]
+
+        self.assertEqual(distribution["level"], "account")
+        self.assertIn("三平台同步低迷", distribution["signals"])
+        self.assertIn("账号/选题阶段异常", " ".join(distribution["判断"]))
+        self.assertIn("账号恢复模式", " ".join(distribution["解决动作"]))
+
 
 if __name__ == "__main__":
     unittest.main()

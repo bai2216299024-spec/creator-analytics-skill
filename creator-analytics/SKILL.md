@@ -1,6 +1,6 @@
 ---
 name: creator-analytics
-description: 一键采集并复盘小红书、抖音、微信公众号创作者账号前一天发布的图文/视频/文章数据，基于账号历史基准和可选对标账号配置分析为什么数据好或差、差在哪里、怎么提升、如何固定有效表达，并生成下一期选题、标题、图文卡片、短视频脚本和公众号文章思路。Use when the user asks to 统计创作者数据、生成每日复盘、分析小红书/抖音/公众号内容表现、读取已发布图文视频文章、判断下一期选题、生成下一期小红书图文/抖音视频/公众号文章文案思路、设置每日内容数据自动复盘。
+description: 一键采集并复盘小红书、抖音、微信公众号创作者账号前一天发布的图文/视频/文章数据，基于账号历史基准和可选对标账号配置分析为什么数据好或差、是否疑似限流或分发异常、差在哪里、怎么提升、如何固定有效表达，并生成下一期选题、标题、图文卡片、短视频脚本和公众号文章思路。Use when the user asks to 统计创作者数据、生成每日复盘、分析小红书/抖音/公众号内容表现、诊断限流或分发异常、读取已发布图文视频文章、判断下一期选题、生成下一期小红书图文/抖音视频/公众号文章文案思路、设置每日内容数据自动复盘。
 ---
 
 # Creator Analytics
@@ -50,7 +50,8 @@ The workflow performs:
 3. Append normalized items to `data/history/content_history.jsonl`.
 4. Compare each item against same-platform, same-content-type account history. Use the latest 30 items; if fewer than 5 exist, use fallback thresholds and mark low confidence.
 5. Read optional benchmark account config from `config/benchmark_accounts.json`. If absent, clearly state external benchmarking is not configured.
-6. Generate Markdown and JSON outputs:
+6. Diagnose distribution anomalies such as low reach with high engagement, content-entry weakness, and multi-platform slump.
+7. Generate Markdown and JSON outputs:
    - `data/output/report_YYYY-MM-DD.md`
    - `data/output/analysis_YYYY-MM-DD.json`
 
@@ -74,6 +75,22 @@ Do not only summarize metrics. Use the report to answer:
 - **怎么提升**: Provide one concrete next action, such as rewriting the first 12 title characters, adding a table/checklist, changing the first 3 seconds, or turning a comment question into the next title.
 - **为什么好**: Identify the topic, hook, structure, save value, comment potential, or share-worthy conclusion that drove performance.
 - **如何固定下来**: Convert working patterns into reusable title formulas, hook formulas, content structures, comment prompts, and platform-specific formats.
+- **是否疑似限流/分发异常**: Distinguish content weakness from distribution issues. Treat low reach with strong interaction as possible initial recommendation-pool weakness; treat all-platform low reach and low interaction as account/topic-stage anomaly; never state hard platform punishment without evidence.
+
+## Distribution / Limit Diagnosis
+
+The report must include `分发/限流诊断` with:
+
+- diagnostic level: `none`, `normal`, `content`, `platform`, or `account`
+- signals such as `疑似初始推荐池未放量`, `内容入口与互动双弱`, or `三平台同步低迷`
+- evidence from current metrics vs historical baseline
+- recovery actions
+
+Recommended actions:
+
+- Low reach + strong interaction: keep the same topic, change title/first scene, and test again instead of abandoning the topic.
+- Low reach + low interaction: fix topic packaging, title, cover, first 3 seconds, and interaction prompt before blaming platform limits.
+- Multi-platform slump: enter account recovery mode for 2-3 posts with safer cultural-science framing, concrete cases, and less abstract repetition.
 
 For Meihua Yishu content, keep public-facing recommendations in `国学文化科普`, `传统文化学习`, and `古人思维方式` framing.
 

@@ -158,6 +158,24 @@ def build_platform_summary(analysis: dict) -> str:
     return "\n".join(lines)
 
 
+def build_distribution_section(analysis: dict) -> str:
+    distribution = analysis.get("distribution_diagnosis") or {}
+    lines = ["## 分发/限流诊断", ""]
+    lines.append(f"- **诊断级别**: {distribution.get('level', 'unknown')}")
+    signals = distribution.get("signals") or []
+    lines.append(f"- **异常信号**: {', '.join(signals) if signals else '未发现明确限流/分发异常信号'}")
+    for item in distribution.get("判断", []):
+        lines.append(f"- **判断**: {item}")
+    evidence = distribution.get("证据") or []
+    if evidence:
+        for item in evidence:
+            lines.append(f"- **证据**: {item}")
+    for item in distribution.get("解决动作", []):
+        lines.append(f"- **解决动作**: {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_next_content(analysis: dict) -> str:
     plan = analysis.get("next_content") or {}
     xhs = plan.get("xhs", {})
@@ -211,6 +229,7 @@ def build_report(daily_data: dict, analysis: dict, report_date: str) -> str:
         build_platform_section("douyin", daily_data.get("douyin")),
         build_platform_section("wechat", daily_data.get("wechat")),
         build_platform_summary(analysis),
+        build_distribution_section(analysis),
         build_diagnostics(analysis),
         build_next_content(analysis),
         "---",
