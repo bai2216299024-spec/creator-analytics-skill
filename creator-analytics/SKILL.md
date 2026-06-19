@@ -125,6 +125,18 @@ python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 
 Do not copy a live user's browser profile to an untrusted machine. Prefer a fresh login in the target environment.
 
+## GitHub Update Rule
+
+When updating the public GitHub repository, always update CHANGELOG.md in the same commit. The changelog entry must explain:
+
+- what was optimized
+- why the optimization matters to the creator workflow
+- which files or workflow areas changed
+- what validation was run
+- whether privacy-sensitive runtime data was excluded
+
+Do not rely on the commit message alone. The changelog is the user-facing record of skill evolution and must be readable by another agent before it runs or modifies the skill.
+
 ## Runtime State
 
 Runtime data is private and should not be committed:
