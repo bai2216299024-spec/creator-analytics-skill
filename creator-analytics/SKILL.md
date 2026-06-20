@@ -188,6 +188,12 @@ WeChat empty results must include collection_status, empty_reason, and login_sta
 
 After a headed/manual WeChat login, the collector must verify that the page actually reaches the backend collection page. If it still shows the login page, set login_status=manual_login_not_accepted, collection_status=login_required, and fail the platform collection; do not save it as a successful empty result.
 
+If WeChat shows the dead-end "请重新登录" page, the collector should navigate to the explicit WeChat login entry before waiting for scan login. If the scan-login entry cannot be opened, fail fast with collection_status=login_required instead of waiting until timeout.
+
+If Playwright cannot launch the WeChat persistent profile because another browser window is already using it, save a structured failed result with empty_reason=browser_profile_locked and tell the user to close the existing WeChat collection browser before retrying. Do not emit an unhandled traceback as the final user-facing result.
+
+Because WeChat is already run with a visible browser when auto-login is enabled, the scheduler must not retry the same WeChat collection a second time with --headed after that headed attempt fails.
+
 ## Validation
 
 After copying or editing this skill, run:

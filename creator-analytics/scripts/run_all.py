@@ -118,6 +118,8 @@ def run_platform(platform: str, script_name: str, common_args: list[str], auto_l
         return code
 
     if platform_requires_login(platform):
+        if "--headed" in run_args:
+            return code
         print(f"\n🔑 {platform} 需要登录，自动打开浏览器重试。请在浏览器中扫码/完成登录。")
         headed_args = list(run_args)
         if "--headed" not in headed_args:

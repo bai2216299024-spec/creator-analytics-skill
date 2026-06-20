@@ -18,6 +18,7 @@ from paths import config_dir, cookie_file, output_dir, profile_dir
 
 PLATFORM = "微信公众号"
 HOME_URL = "https://mp.weixin.qq.com/"
+LOGIN_URL = "https://mp.weixin.qq.com/cgi-bin/loginpage?t=wxm2-login&lang=zh_CN"
 APPMSG_URL = "https://mp.weixin.qq.com/cgi-bin/appmsgpublish"
 DEFAULT_COOKIE_FILE = cookie_file("wechat")
 DEFAULT_OUTPUT_DIR = output_dir()
@@ -75,14 +76,19 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
         print(f"ℹ️ {notice}")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(DEFAULT_PROFILE_DIR),
-            headless=headless,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-            viewport={"width": 1440, "height": 900},
-            locale="zh-CN",
-            timezone_id="Asia/Shanghai",
-        )
+        try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(DEFAULT_PROFILE_DIR),
+                headless=headless,
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                viewport={"width": 1440, "height": 900},
+                locale="zh-CN",
+                timezone_id="Asia/Shanghai",
+            )
+        except Exception as e:
+            mark_browser_launch_failure(result, e)
+            print(f"❌ 微信公众号浏览器启动失败: {result['error']}")
+            return result
         page = context.new_page()
         try:
             print("📰 正在访问微信公众号后台...")
@@ -93,6 +99,14 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
                     result["collection_status"] = "login_required"
                     result["login_status"] = "expired_headless"
                     raise RuntimeError("微信公众号登录态过期，请使用 --headed 模式扫码登录")
+                if is_relogin_page(page):
+                    print("🔑 微信公众号显示“请重新登录”，正在跳转到扫码登录入口...")
+                    open_login_entry(page)
+                    if is_relogin_page(page):
+                        result["collection_status"] = "login_required"
+                        result["login_status"] = "relogin_entry_unavailable"
+                        result["empty_reason"] = "login_required"
+                        raise RuntimeError("微信公众号只显示“请重新登录”，未能打开扫码登录入口")
                 print("🔑 请在打开的浏览器中扫码登录微信公众号后台...")
                 result["login_status"] = "manual_login_required"
                 wait_until_logged_in(page, timeout_ms=300000)
@@ -130,6 +144,17 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
         finally:
             context.close()
     return result
+
+
+def mark_browser_launch_failure(result: dict, error: Exception):
+    message = str(error)
+    result["collection_status"] = "failed"
+    result["empty_reason"] = "browser_profile_locked"
+    result["login_status"] = "browser_launch_failed"
+    if "user data" in message.lower() or "profile" in message.lower() or "Target page" in message:
+        result["error"] = "微信公众号浏览器 profile 可能已被另一个窗口占用，请关闭已打开的公众号采集浏览器后重试"
+    else:
+        result["error"] = f"微信公众号浏览器启动失败: {message}"
 
 
 def verify_backend_access(page, result: dict):
@@ -203,6 +228,22 @@ def is_login_page(page) -> bool:
     login_markers = ["微信公众平台", "扫码登录", "请使用微信扫描二维码", "登录"]
     backend_markers = ["首页", "新的创作", "发表记录", "内容管理", "统计"]
     return any(marker in text for marker in login_markers) and not any(marker in text for marker in backend_markers)
+
+
+def is_relogin_page(page) -> bool:
+    try:
+        text = page.inner_text("body", timeout=5000)
+    except Exception:
+        return False
+    return "请重新登录" in text or "重新登录" in text
+
+
+def open_login_entry(page):
+    for url in (LOGIN_URL, HOME_URL):
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(4000)
+        if not is_relogin_page(page):
+            return
 
 
 def wait_until_logged_in(page, timeout_ms: int):

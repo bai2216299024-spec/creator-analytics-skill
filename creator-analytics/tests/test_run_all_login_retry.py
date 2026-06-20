@@ -57,6 +57,19 @@ class RunAllLoginRetryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(calls[0], ("scrape_wechat.py", ("--date", "2026-06-20", "--headed")))
 
+    def test_wechat_headed_first_failure_is_not_retried_again(self):
+        calls = []
+
+        def fake_run_script(script_name, *args):
+            calls.append((script_name, args))
+            return 1
+
+        with patch.object(run_all, "run_script", side_effect=fake_run_script), patch.object(run_all, "platform_requires_login", return_value=True):
+            code = run_all.run_platform("wechat", "scrape_wechat.py", ["--date", "2026-06-20"], auto_login=True)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, [("scrape_wechat.py", ("--date", "2026-06-20", "--headed"))])
+
     def test_wechat_does_not_force_headed_when_auto_login_disabled(self):
         calls = []
 

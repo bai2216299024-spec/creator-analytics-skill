@@ -14,15 +14,23 @@ from comments_utils import (
     summarize_comment_insights,
 )
 from generate_report import build_comments_section, build_platform_section
-from scrape_wechat import classify_empty_page, profile_init_notice, verify_backend_access
+from scrape_wechat import classify_empty_page, is_relogin_page, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access
 
 
 class FakePage:
     def __init__(self, text):
         self.text = text
+        self.visited_urls = []
 
     def inner_text(self, selector, timeout=0):
         return self.text
+
+    def goto(self, url, wait_until=None, timeout=0):
+        self.visited_urls.append(url)
+        self.text = "微信公众平台\n扫码登录\n请使用微信扫描二维码"
+
+    def wait_for_timeout(self, timeout):
+        return None
 
 
 class CommentsPipelineTests(unittest.TestCase):
@@ -276,6 +284,26 @@ class CommentsPipelineTests(unittest.TestCase):
         self.assertEqual(result["login_status"], "manual_login_not_accepted")
         self.assertEqual(result["collection_status"], "login_required")
         self.assertEqual(result["empty_reason"], "login_required")
+
+    def test_wechat_relogin_page_opens_login_entry(self):
+        page = FakePage("公众号\n请重新登录")
+
+        self.assertTrue(is_relogin_page(page))
+        open_login_entry(page)
+
+        self.assertTrue(page.visited_urls)
+        self.assertFalse(is_relogin_page(page))
+        self.assertIn("扫码登录", page.inner_text("body"))
+
+    def test_wechat_browser_profile_lock_is_reported_without_traceback(self):
+        result = {"collection_status": "pending", "empty_reason": None, "login_status": "unknown", "error": None}
+
+        mark_browser_launch_failure(result, RuntimeError("Target page, context or browser has been closed; user data directory is already in use"))
+
+        self.assertEqual(result["collection_status"], "failed")
+        self.assertEqual(result["empty_reason"], "browser_profile_locked")
+        self.assertEqual(result["login_status"], "browser_launch_failed")
+        self.assertIn("profile", result["error"])
 
 
 if __name__ == "__main__":

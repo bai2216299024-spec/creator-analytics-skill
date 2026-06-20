@@ -10,6 +10,9 @@ This file records user-facing improvements for every GitHub update. Keep it read
 - Updated the Markdown report so unreadable WeChat lists or dry-runs are not reported as confirmed "no new publish".
 - Added regression tests for no_matching_date, target-date-visible parse failures, list-unreadable reporting, and dry-run reporting.
 - Made WeChat manual-login verification fail loudly when scanning does not actually reach the backend collection page.
+- Added WeChat "please re-login" page handling: jump to the real scan-login entry instead of waiting on a dead-end page.
+- Converted WeChat browser/profile launch failures into structured reportable errors instead of raw Playwright tracebacks.
+- Prevented duplicate WeChat headed retries after the scheduler has already run WeChat in a visible browser.
 - Changed the daily scheduler so WeChat Official Account collection runs with a visible browser first when auto-login is enabled.
 - Kept dry-run, explicit --headed, and --no-auto-login behavior unchanged.
 - Added regression coverage for the WeChat headed-first path and the no-auto-login path.
@@ -20,6 +23,9 @@ This file records user-facing improvements for every GitHub update. Keep it read
 - Running WeChat headed first avoids a false "login expired" pass and makes daily review behavior easier to understand.
 - Empty WeChat results now carry enough evidence to distinguish "no matching publish date" from "the list was not readable".
 - A manual scan that returns to the login page is now treated as login_required instead of a successful empty collection.
+- The collector no longer waits on the blank "请重新登录" page; it redirects to the login entry or fails with a clear login_required status.
+- If an existing WeChat collection browser is still using the persistent profile, the report now says browser_profile_locked and asks the user to close the old window before retrying.
+- WeChat login failure now prompts once per run instead of retrying the same headed attempt twice.
 - Other platforms still use the normal retry flow, so the change is scoped to the platform with the unstable headless session.
 
 ### Verification
