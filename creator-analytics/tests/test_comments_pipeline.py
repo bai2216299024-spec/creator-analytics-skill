@@ -14,7 +14,7 @@ from comments_utils import (
     summarize_comment_insights,
 )
 from generate_report import build_comments_section, build_platform_section
-from scrape_wechat import classify_empty_page, profile_init_notice
+from scrape_wechat import classify_empty_page, profile_init_notice, verify_backend_access
 
 
 class FakePage:
@@ -265,6 +265,17 @@ class CommentsPipelineTests(unittest.TestCase):
 
         self.assertIn("未检查是否新增发布", section)
         self.assertNotIn("昨日无新增发布内容。", section)
+
+    def test_wechat_manual_login_must_reach_backend(self):
+        result = {"login_status": "manual_login_completed", "collection_status": "pending", "empty_reason": None}
+        page = FakePage("微信公众平台\n扫码登录\n请使用微信扫描二维码")
+
+        with self.assertRaises(RuntimeError):
+            verify_backend_access(page, result)
+
+        self.assertEqual(result["login_status"], "manual_login_not_accepted")
+        self.assertEqual(result["collection_status"], "login_required")
+        self.assertEqual(result["empty_reason"], "login_required")
 
 
 if __name__ == "__main__":

@@ -97,12 +97,13 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
                 result["login_status"] = "manual_login_required"
                 wait_until_logged_in(page, timeout_ms=300000)
                 result["login_status"] = "manual_login_completed"
-                save_cookies(context, cookie_path)
                 page.goto(APPMSG_URL, wait_until="domcontentloaded", timeout=60000)
                 page.wait_for_timeout(5000)
             else:
                 result["login_status"] = "profile_reused"
-                save_cookies(context, cookie_path)
+
+            verify_backend_access(page, result)
+            save_cookies(context, cookie_path)
 
             items = parse_items(page, target_date_str)
             if items:
@@ -129,6 +130,19 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
         finally:
             context.close()
     return result
+
+
+def verify_backend_access(page, result: dict):
+    """Fail loudly when WeChat still shows login after a manual/profile login attempt."""
+    if not is_login_page(page):
+        return
+    if result.get("login_status") == "manual_login_completed":
+        result["login_status"] = "manual_login_not_accepted"
+    elif result.get("login_status") == "profile_reused":
+        result["login_status"] = "profile_expired"
+    result["collection_status"] = "login_required"
+    result["empty_reason"] = "login_required"
+    raise RuntimeError("微信公众号登录后仍未进入后台采集页，请重新扫码或检查该账号是否有公众号后台权限")
 
 
 def classify_empty_page(page, target_date_str: str) -> dict:

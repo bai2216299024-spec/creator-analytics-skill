@@ -186,6 +186,8 @@ When auto-login is enabled, run_all.py runs WeChat collection with --headed firs
 
 WeChat empty results must include collection_status, empty_reason, and login_status. Treat collection_status=empty with empty_reason=no_matching_date or empty_list_visible as a likely confirmed no-new-publish result. Treat list_unreadable, login_required, target_date_visible_but_parse_failed, backend_not_confirmed, and dry_run/skipped as not enough evidence to claim no publish.
 
+After a headed/manual WeChat login, the collector must verify that the page actually reaches the backend collection page. If it still shows the login page, set login_status=manual_login_not_accepted, collection_status=login_required, and fail the platform collection; do not save it as a successful empty result.
+
 ## Validation
 
 After copying or editing this skill, run:
