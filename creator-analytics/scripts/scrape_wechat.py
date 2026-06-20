@@ -51,8 +51,19 @@ def save_cookies(context, path: str):
     print(f"✅ 微信公众号 Cookies 已保存到 {path}")
 
 
+def profile_init_notice(profile_exists: bool, cookie_exists: bool) -> str:
+    if not profile_exists and cookie_exists:
+        return "检测到旧 wechat_cookies.json，但尚未建立 data/browser/wechat_profile/；需要 headed 登录一次以建立公众号 profile。"
+    if not profile_exists:
+        return "尚未建立 data/browser/wechat_profile/；首次运行需要 headed 登录一次以保存公众号登录态。"
+    return ""
+
+
 def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_date_str: str, comments_limit: int = 50, skip_comments: bool = False) -> dict:
     result = {"platform": PLATFORM, "date": target_date_str, "items": [], "empty": True, "error": None}
+    notice = profile_init_notice(DEFAULT_PROFILE_DIR.exists(), Path(cookie_path).exists())
+    if notice:
+        print(f"ℹ️ {notice}")
 
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(

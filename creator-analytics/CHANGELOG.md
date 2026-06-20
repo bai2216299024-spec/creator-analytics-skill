@@ -6,6 +6,10 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 ### Optimized
 
+- Hardened comment collection for production daily reviews: platform-specific containers only, no whole-page text fallback, explicit collection statuses, and confidence scoring.
+- Changed comment insights to use user questions / high-value questions unless reliable reply thread data exists.
+- Added comment collection health reporting and stricter topic-candidate filtering so creator replies and unknown-source comments do not drive next-topic recommendations.
+- Added WeChat profile initialization notice when legacy cookie JSON exists but persistent profile has not been established.
 - Upgraded WeChat Official Account login persistence from storage-state cookies only to a persistent browser profile.
 - Added cross-platform comment-detail collection with comments_detail and comment_collection_status.
 - Added creator-account comment classification through private config/self_accounts.json.

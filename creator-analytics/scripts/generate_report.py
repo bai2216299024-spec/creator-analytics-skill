@@ -191,12 +191,19 @@ def build_comments_section(analysis: dict) -> str:
 
     lines.append(
         f"- **评论总量**: {total}；他人评论 {insights.get('other_comments', 0)}；"
-        f"自己账号回复 {insights.get('self_comments', 0)}；回复覆盖 {insights.get('self_reply_coverage', '0/0')}"
+        f"自己账号回复 {insights.get('self_comments', 0)}；回复数量比例 {insights.get('self_reply_ratio', '0/0')}"
     )
+    health = insights.get("comment_collection_health") or {}
+    if health:
+        health_text = "；".join(f"{key}={value}" for key, value in health.items() if value)
+        lines.append(f"- **评论采集健康度**: {health_text or '暂无采集状态'}")
+    lines.append("")
     render_comment_lines(lines, "他人评论摘要", insights.get("other_summary") or [])
-    render_comment_lines(lines, "自己账号回复摘要", insights.get("self_summary") or [])
-    render_comment_refs(lines, "未回复但值得回复的问题", insights.get("unanswered_questions") or [])
-    render_comment_refs(lines, "可直接变成下一期选题的评论", insights.get("next_topic_candidates") or [])
+    render_comment_lines(lines, "自己账号回复摘要", insights.get("self_reply_summary") or insights.get("self_summary") or [])
+    render_comment_refs(lines, "用户高价值问题", insights.get("user_questions") or [])
+    if insights.get("unanswered_questions"):
+        render_comment_refs(lines, "已确认未回复的问题", insights.get("unanswered_questions") or [])
+    render_comment_refs(lines, "可直接变成下一期选题的评论", insights.get("topic_candidates_from_comments") or insights.get("next_topic_candidates") or [])
     failures = insights.get("collection_failures") or []
     if failures:
         lines.append("**评论采集异常**")

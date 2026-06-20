@@ -7,8 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from analysis_engine import analyze_daily_data, normalize_platform_data
-from comments_utils import classify_comment_author, normalize_comment, summarize_comment_insights
+from comments_utils import (
+    classify_comment_author,
+    extract_platform_comments_from_blocks,
+    normalize_comment,
+    summarize_comment_insights,
+)
 from generate_report import build_comments_section
+from scrape_wechat import profile_init_notice
 
 
 class CommentsPipelineTests(unittest.TestCase):
@@ -31,7 +37,28 @@ class CommentsPipelineTests(unittest.TestCase):
         self.assertEqual(comment["author_name"], "清净法典")
         self.assertEqual(comment["like_count"], 3)
         self.assertTrue(comment["is_self"])
+        self.assertEqual(comment["confidence"], "high")
         self.assertEqual(comment["collection_status"], "ok")
+
+    def test_plain_page_text_does_not_become_comments(self):
+        blocks = [
+            "八卦的具体用法\n播放量 100\n点赞 2\n评论 1\n编辑作品",
+            "作品管理\n全部作品\n查看数据\n发布于 2026-06-19",
+        ]
+
+        comments = extract_platform_comments_from_blocks(blocks, "xhs", {}, limit=50)
+
+        self.assertEqual(comments, [])
+
+    def test_structured_comment_block_becomes_medium_or_high_confidence_comment(self):
+        blocks = ["用户A\n能不能讲一个生活案例？\n3赞\n2026-06-19"]
+
+        comments = extract_platform_comments_from_blocks(blocks, "douyin", {}, limit=50)
+
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(comments[0]["author_name"], "用户A")
+        self.assertIn("生活案例", comments[0]["content"])
+        self.assertIn(comments[0]["confidence"], {"medium", "high"})
 
     def test_classifies_other_comment_and_keeps_unknown_author_as_none(self):
         self_accounts = {"douyin": {"aliases": ["清净法典"]}}
@@ -105,9 +132,47 @@ class CommentsPipelineTests(unittest.TestCase):
         self.assertEqual(insights["total_comments"], 3)
         self.assertEqual(insights["other_comments"], 2)
         self.assertEqual(insights["self_comments"], 1)
-        self.assertEqual(insights["self_reply_coverage"], "1/2")
-        self.assertTrue(insights["next_topic_candidates"])
-        self.assertIn("工作选择", insights["unanswered_questions"][0]["content"])
+        self.assertEqual(insights["self_reply_ratio"], "1/2")
+        self.assertTrue(insights["topic_candidates_from_comments"])
+        self.assertIn("工作选择", insights["user_questions"][0]["content"])
+        self.assertEqual(insights["unanswered_questions"], [])
+
+    def test_self_and_unknown_comments_do_not_enter_topic_candidates(self):
+        item = {
+            "platform": "小红书",
+            "title": "八卦用法",
+            "comments_detail": [
+                {"author_name": "用户A", "content": "想看生活案例", "is_self": False, "confidence": "medium"},
+                {"author_name": "创作者本人", "content": "下一期我来讲。", "is_self": True, "confidence": "high"},
+                {"author_name": "", "content": "未知来源问题", "is_self": None, "confidence": "medium"},
+                {"author_name": "用户B", "content": "低置信度内容", "is_self": False, "confidence": "low"},
+            ],
+        }
+
+        insights = summarize_comment_insights([item])
+        joined = json.dumps(insights["topic_candidates_from_comments"], ensure_ascii=False)
+
+        self.assertIn("想看生活案例", joined)
+        self.assertNotIn("下一期我来讲", joined)
+        self.assertNotIn("未知来源问题", joined)
+        self.assertNotIn("低置信度内容", joined)
+
+    def test_unanswered_questions_only_when_reply_threads_exist(self):
+        item = {
+            "platform": "微信公众号",
+            "title": "八卦用法",
+            "comments_detail": [
+                {"comment_id": "c1", "author_name": "用户A", "content": "这个怎么用？", "is_self": False, "confidence": "high"},
+                {"comment_id": "c2", "author_name": "用户B", "content": "能讲案例吗？", "is_self": False, "confidence": "high"},
+                {"comment_id": "r1", "author_name": "公众号作者", "content": "可以。", "is_self": True, "reply_to": "c1", "confidence": "high"},
+            ],
+        }
+
+        insights = summarize_comment_insights([item])
+        joined = json.dumps(insights["unanswered_questions"], ensure_ascii=False)
+
+        self.assertNotIn("这个怎么用", joined)
+        self.assertIn("能讲案例吗", joined)
 
     def test_report_renders_comment_insights_section(self):
         analysis = {
@@ -115,11 +180,13 @@ class CommentsPipelineTests(unittest.TestCase):
                 "total_comments": 2,
                 "other_comments": 1,
                 "self_comments": 1,
-                "self_reply_coverage": "1/1",
+                "self_reply_ratio": "1/1",
+                "comment_collection_health": {"ok": 1, "failed": 0, "empty": 0},
                 "other_summary": ["用户追问：能不能讲一个生活案例？"],
-                "self_summary": ["自己账号回复：下一期安排案例。"],
+                "self_reply_summary": ["自己账号回复：下一期安排案例。"],
                 "unanswered_questions": [],
-                "next_topic_candidates": [{"platform": "小红书", "title": "八卦用法", "content": "能不能讲一个生活案例？"}],
+                "user_questions": [{"platform": "小红书", "title": "八卦用法", "content": "能不能讲一个生活案例？"}],
+                "topic_candidates_from_comments": [{"platform": "小红书", "title": "八卦用法", "content": "能不能讲一个生活案例？"}],
                 "collection_failures": [],
             }
         }
@@ -129,7 +196,15 @@ class CommentsPipelineTests(unittest.TestCase):
         self.assertIn("## 评论洞察", section)
         self.assertIn("他人评论", section)
         self.assertIn("自己账号回复", section)
+        self.assertIn("用户高价值问题", section)
         self.assertIn("生活案例", section)
+        self.assertNotIn("未回复但值得回复", section)
+
+    def test_wechat_profile_notice_when_cookie_exists_without_profile(self):
+        notice = profile_init_notice(profile_exists=False, cookie_exists=True)
+
+        self.assertIn("需要 headed 登录一次", notice)
+        self.assertIn("wechat_profile", notice)
 
 
 if __name__ == "__main__":

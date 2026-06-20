@@ -53,7 +53,7 @@ The workflow performs:
 4. Compare each item against same-platform, same-content-type account history. Use the latest 30 items; if fewer than 5 exist, use fallback thresholds and mark low confidence.
 5. Read optional benchmark account config from `config/benchmark_accounts.json`. If absent, clearly state external benchmarking is not configured.
 6. Diagnose distribution anomalies such as low reach with high engagement, content-entry weakness, and multi-platform slump.
-7. Collect comment details where detail/comment pages are available. Default to 50 comments per content item; use --skip-comments for faster metric-only runs.
+7. Collect comment details where platform-specific detail/comment containers are available. Default to 50 comments per content item; use --skip-comments for faster metric-only runs.
 8. Separate other-user comments from the creator's own replies using config/self_accounts.json when present.
 9. Generate Markdown and JSON outputs:
    - `data/output/report_YYYY-MM-DD.md`
@@ -117,9 +117,13 @@ If no benchmark config exists, the report must say `未配置对标账号` and c
 
 ## Comment Collection
 
-By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is best-effort: if a platform detail page is unavailable or the page structure changes, keep the base metrics and mark comment_collection_status instead of failing the whole report.
+By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is production-safe and conservative: do not turn ordinary page text, buttons, menus, titles, metrics, or body copy into comments. If a platform detail page is unavailable or the page structure changes, keep the base metrics and mark comment_collection_status instead of failing the whole report.
 
-Each comment uses: comment_id, author_name, author_role, content, publish_time, like_count, reply_to, is_self, source_area, and collection_status.
+Valid comment_collection_status values: ok, empty, skipped, no_detail_url, no_comment_container, login_required, failed.
+
+Each comment uses: comment_id, author_name, author_role, content, publish_time, like_count, reply_to, is_self, source_area, collection_status, and confidence.
+
+Confidence values are high, medium, and low. Only is_self=false comments with high or medium confidence may be used as next-topic evidence. is_self=true comments are creator replies and must never be treated as audience demand. is_self=null comments stay in unknown-source summaries and should not drive recommendations.
 
 Copy the example file before adding real account names:
 
@@ -128,6 +132,8 @@ config/self_accounts.example.json -> config/self_accounts.json
 ```
 
 self_accounts.json must stay private. Use it to list the creator's display names for xhs, douyin, and wechat; matching comments are marked is_self=true. Other comments are marked is_self=false; unknown author comments keep is_self=null.
+
+Only report unanswered questions when reliable reply_to/thread information exists. Without thread information, call them user questions or high-value questions, not unanswered questions.
 
 ## Portable Or Multi-Agent Use
 
@@ -174,7 +180,7 @@ python scripts/one_click_review.py --headed
 
 After successful login, later runs should reuse the saved browser state. If a later run detects expired login state, `run_all.py` will retry the failed platform once with `--headed` unless `--headed`, `--dry-run`, or `--no-auto-login` is already set.
 
-WeChat Official Account uses data/browser/wechat_profile/ as the primary login state so the backend session survives better than storage-state cookies alone. Cookie JSON remains a compatibility backup.
+WeChat Official Account uses data/browser/wechat_profile/ as the primary login state so the backend session survives better than storage-state cookies alone. Cookie JSON remains a diagnostic backup; if profile state does not exist, run headed once to establish wechat_profile.
 
 ## Validation
 
