@@ -60,7 +60,16 @@ def profile_init_notice(profile_exists: bool, cookie_exists: bool) -> str:
 
 
 def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_date_str: str, comments_limit: int = 50, skip_comments: bool = False) -> dict:
-    result = {"platform": PLATFORM, "date": target_date_str, "items": [], "empty": True, "error": None}
+    result = {
+        "platform": PLATFORM,
+        "date": target_date_str,
+        "items": [],
+        "empty": True,
+        "error": None,
+        "collection_status": "pending",
+        "empty_reason": None,
+        "login_status": "unknown",
+    }
     notice = profile_init_notice(DEFAULT_PROFILE_DIR.exists(), Path(cookie_path).exists())
     if notice:
         print(f"ℹ️ {notice}")
@@ -81,13 +90,18 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
             page.wait_for_timeout(3000)
             if is_login_page(page):
                 if headless:
+                    result["collection_status"] = "login_required"
+                    result["login_status"] = "expired_headless"
                     raise RuntimeError("微信公众号登录态过期，请使用 --headed 模式扫码登录")
                 print("🔑 请在打开的浏览器中扫码登录微信公众号后台...")
+                result["login_status"] = "manual_login_required"
                 wait_until_logged_in(page, timeout_ms=300000)
+                result["login_status"] = "manual_login_completed"
                 save_cookies(context, cookie_path)
                 page.goto(APPMSG_URL, wait_until="domcontentloaded", timeout=60000)
                 page.wait_for_timeout(5000)
             else:
+                result["login_status"] = "profile_reused"
                 save_cookies(context, cookie_path)
 
             items = parse_items(page, target_date_str)
@@ -101,15 +115,70 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
                     skip_comments,
                 )
                 result["empty"] = False
+                result["collection_status"] = "ok"
                 print(f"🎯 找到 {len(result['items'])} 条昨日公众号内容")
             else:
-                print("📭 公众号昨日无新增发布内容或列表不可见")
+                empty_status = classify_empty_page(page, target_date_str)
+                result.update(empty_status)
+                print(f"📭 公众号未抓到目标日期内容：{empty_status.get('empty_reason')}")
         except Exception as e:
+            if result.get("collection_status") == "pending":
+                result["collection_status"] = "failed"
             result["error"] = str(e)
             print(f"❌ 微信公众号采集异常: {e}")
         finally:
             context.close()
     return result
+
+
+def classify_empty_page(page, target_date_str: str) -> dict:
+    """Explain why WeChat returned no items, without treating every empty result as no publish."""
+    if is_login_page(page):
+        return {
+            "collection_status": "login_required",
+            "empty_reason": "login_required",
+        }
+
+    try:
+        text = page.inner_text("body", timeout=10000)
+    except Exception:
+        return {
+            "collection_status": "list_unreadable",
+            "empty_reason": "body_unreadable",
+        }
+
+    backend_markers = ["首页", "新的创作", "发表记录", "内容管理", "统计", "群发", "已发表"]
+    list_markers = ["发表记录", "已发表", "群发记录", "发布记录", "appmsgpublish"]
+    empty_markers = ["暂无", "没有", "无数据", "暂无数据", "还没有"]
+
+    if not any(marker in text for marker in backend_markers):
+        return {
+            "collection_status": "list_unreadable",
+            "empty_reason": "backend_not_confirmed",
+        }
+
+    if matches_target_date(text, target_date_str):
+        return {
+            "collection_status": "list_unreadable",
+            "empty_reason": "target_date_visible_but_parse_failed",
+        }
+
+    if any(marker in text for marker in list_markers):
+        return {
+            "collection_status": "empty",
+            "empty_reason": "no_matching_date",
+        }
+
+    if any(marker in text for marker in empty_markers):
+        return {
+            "collection_status": "empty",
+            "empty_reason": "empty_list_visible",
+        }
+
+    return {
+        "collection_status": "list_unreadable",
+        "empty_reason": "no_publish_list_marker",
+    }
 
 
 def is_login_page(page) -> bool:
@@ -327,7 +396,16 @@ def main():
     print(f"📰 微信公众号数据采集 - 目标日期: {date_str}")
     print("=" * 50)
     if args.dry_run:
-        result = {"platform": PLATFORM, "date": date_str, "items": [], "empty": True, "error": None}
+        result = {
+            "platform": PLATFORM,
+            "date": date_str,
+            "items": [],
+            "empty": True,
+            "error": None,
+            "collection_status": "skipped",
+            "empty_reason": "dry_run",
+            "login_status": "not_checked",
+        }
     else:
         result = scrape_wechat(args.cookie_file, args.output_dir, not args.headed, date_str, args.comments_limit, args.skip_comments)
     save_output(result, args.output_dir)

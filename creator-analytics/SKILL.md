@@ -184,6 +184,8 @@ WeChat Official Account uses data/browser/wechat_profile/ as the primary login s
 
 When auto-login is enabled, run_all.py runs WeChat collection with --headed first because mp.weixin.qq.com may challenge headless browser sessions even when the persistent profile exists. --dry-run, explicit --headed, and --no-auto-login keep their normal behavior.
 
+WeChat empty results must include collection_status, empty_reason, and login_status. Treat collection_status=empty with empty_reason=no_matching_date or empty_list_visible as a likely confirmed no-new-publish result. Treat list_unreadable, login_required, target_date_visible_but_parse_failed, backend_not_confirmed, and dry_run/skipped as not enough evidence to claim no publish.
+
 ## Validation
 
 After copying or editing this skill, run:

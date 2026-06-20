@@ -6,6 +6,9 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 ### Optimized
 
+- Added explicit WeChat empty-result evidence fields: collection_status, empty_reason, and login_status.
+- Updated the Markdown report so unreadable WeChat lists or dry-runs are not reported as confirmed "no new publish".
+- Added regression tests for no_matching_date, target-date-visible parse failures, list-unreadable reporting, and dry-run reporting.
 - Changed the daily scheduler so WeChat Official Account collection runs with a visible browser first when auto-login is enabled.
 - Kept dry-run, explicit --headed, and --no-auto-login behavior unchanged.
 - Added regression coverage for the WeChat headed-first path and the no-auto-login path.
@@ -14,6 +17,7 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 - The WeChat backend can challenge headless browser sessions even when a persistent profile exists.
 - Running WeChat headed first avoids a false "login expired" pass and makes daily review behavior easier to understand.
+- Empty WeChat results now carry enough evidence to distinguish "no matching publish date" from "the list was not readable".
 - Other platforms still use the normal retry flow, so the change is scoped to the platform with the unstable headless session.
 
 ### Verification

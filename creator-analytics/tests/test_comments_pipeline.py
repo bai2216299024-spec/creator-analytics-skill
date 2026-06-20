@@ -13,8 +13,16 @@ from comments_utils import (
     normalize_comment,
     summarize_comment_insights,
 )
-from generate_report import build_comments_section
-from scrape_wechat import profile_init_notice
+from generate_report import build_comments_section, build_platform_section
+from scrape_wechat import classify_empty_page, profile_init_notice
+
+
+class FakePage:
+    def __init__(self, text):
+        self.text = text
+
+    def inner_text(self, selector, timeout=0):
+        return self.text
 
 
 class CommentsPipelineTests(unittest.TestCase):
@@ -205,6 +213,58 @@ class CommentsPipelineTests(unittest.TestCase):
 
         self.assertIn("需要 headed 登录一次", notice)
         self.assertIn("wechat_profile", notice)
+
+    def test_wechat_empty_page_classifies_no_matching_date(self):
+        page = FakePage("首页\n发表记录\n2026-06-19\n第一期文章\n阅读 100")
+
+        status = classify_empty_page(page, "2026-06-20")
+
+        self.assertEqual(status["collection_status"], "empty")
+        self.assertEqual(status["empty_reason"], "no_matching_date")
+
+    def test_wechat_empty_page_classifies_parse_failure_when_target_date_visible(self):
+        page = FakePage("首页\n发表记录\n2026-06-20\n阅读 100\n点赞 3")
+
+        status = classify_empty_page(page, "2026-06-20")
+
+        self.assertEqual(status["collection_status"], "list_unreadable")
+        self.assertEqual(status["empty_reason"], "target_date_visible_but_parse_failed")
+
+    def test_wechat_report_does_not_claim_no_publish_when_list_unreadable(self):
+        section = build_platform_section(
+            "wechat",
+            {
+                "platform": "微信公众号",
+                "date": "2026-06-20",
+                "items": [],
+                "empty": True,
+                "error": None,
+                "collection_status": "list_unreadable",
+                "empty_reason": "target_date_visible_but_parse_failed",
+                "login_status": "manual_login_completed",
+            },
+        )
+
+        self.assertIn("不能直接等同于无新增发布", section)
+        self.assertIn("target_date_visible_but_parse_failed", section)
+
+    def test_wechat_report_does_not_claim_no_publish_on_dry_run(self):
+        section = build_platform_section(
+            "wechat",
+            {
+                "platform": "微信公众号",
+                "date": "2026-06-20",
+                "items": [],
+                "empty": True,
+                "error": None,
+                "collection_status": "skipped",
+                "empty_reason": "dry_run",
+                "login_status": "not_checked",
+            },
+        )
+
+        self.assertIn("未检查是否新增发布", section)
+        self.assertNotIn("昨日无新增发布内容。", section)
 
 
 if __name__ == "__main__":

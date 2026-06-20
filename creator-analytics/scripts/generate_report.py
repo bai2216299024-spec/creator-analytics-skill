@@ -59,6 +59,22 @@ def display_metric(value) -> str:
     return format_number(value)
 
 
+def platform_status_note(platform: str, data: dict) -> str:
+    status = data.get("collection_status")
+    empty_reason = data.get("empty_reason")
+    login_status = data.get("login_status")
+    parts = []
+    if status:
+        parts.append(f"采集状态: {status}")
+    if empty_reason:
+        parts.append(f"空结果原因: {empty_reason}")
+    if login_status:
+        parts.append(f"登录状态: {login_status}")
+    if not parts:
+        return ""
+    return f"{platform} {'；'.join(parts)}。"
+
+
 def build_platform_section(platform_key: str, data: dict | None) -> str:
     platform = platform_title(platform_key)
     lines = [f"## {platform}", ""]
@@ -68,6 +84,9 @@ def build_platform_section(platform_key: str, data: dict | None) -> str:
 
     error = data.get("error")
     items = data.get("items", [])
+    status_note = platform_status_note(platform, data)
+    if status_note:
+        lines.extend([f"> {status_note}", ""])
     if error:
         lines.append(f"> 采集失败：{error}")
         if not items:
@@ -75,7 +94,16 @@ def build_platform_section(platform_key: str, data: dict | None) -> str:
             return "\n".join(lines)
         lines.append("")
     if not items:
-        lines.extend([f"> {platform} 昨日无新增发布内容。", ""])
+        status = data.get("collection_status")
+        empty_reason = data.get("empty_reason")
+        if status == "skipped":
+            lines.extend([f"> {platform} 本次为跳过/演练采集，未检查是否新增发布。", ""])
+        elif status == "empty" and empty_reason in {"no_matching_date", "empty_list_visible"}:
+            lines.extend([f"> {platform} 昨日无新增发布内容。", ""])
+        elif status in {"list_unreadable", "login_required", "failed"}:
+            lines.extend([f"> {platform} 未抓到目标日期内容，但原因是 {empty_reason or status}，不能直接等同于无新增发布。", ""])
+        else:
+            lines.extend([f"> {platform} 昨日无新增发布内容或列表不可见。", ""])
         return "\n".join(lines)
 
     first_metric = metric_label(platform_key)
