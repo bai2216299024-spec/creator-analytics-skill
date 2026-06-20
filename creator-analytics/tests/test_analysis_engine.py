@@ -191,6 +191,48 @@ class CreatorAnalyticsAnalysisTests(unittest.TestCase):
         self.assertIn("账号/选题阶段异常", " ".join(distribution["判断"]))
         self.assertIn("账号恢复模式", " ".join(distribution["解决动作"]))
 
+    def test_platform_summary_reports_wechat_collection_failure(self):
+        daily = {
+            "wechat": {
+                "platform": "微信公众号",
+                "date": "2026-06-20",
+                "items": [],
+                "empty": True,
+                "error": "微信公众号登录后仍未进入后台采集页",
+                "collection_status": "login_required",
+                "empty_reason": "login_required",
+                "login_status": "manual_login_not_accepted",
+            }
+        }
+
+        analysis = analyze_daily_data(daily, history=[], benchmark_config={})
+        wechat_summary = next(row for row in analysis["platform_summaries"] if row["platform"] == "微信公众号")
+
+        self.assertIn("采集失败", wechat_summary["summary"])
+        self.assertIn("login_required", wechat_summary["summary"])
+        self.assertNotIn("无新增发布", wechat_summary["summary"])
+
+    def test_platform_summary_reports_wechat_unreadable_without_error(self):
+        daily = {
+            "wechat": {
+                "platform": "微信公众号",
+                "date": "2026-06-20",
+                "items": [],
+                "empty": True,
+                "error": None,
+                "collection_status": "list_unreadable",
+                "empty_reason": "backend_not_confirmed",
+                "login_status": "manual_login_completed",
+            }
+        }
+
+        analysis = analyze_daily_data(daily, history=[], benchmark_config={})
+        wechat_summary = next(row for row in analysis["platform_summaries"] if row["platform"] == "微信公众号")
+
+        self.assertIn("采集未确认", wechat_summary["summary"])
+        self.assertIn("backend_not_confirmed", wechat_summary["summary"])
+        self.assertNotIn("无新增发布", wechat_summary["summary"])
+
 
 if __name__ == "__main__":
     unittest.main()

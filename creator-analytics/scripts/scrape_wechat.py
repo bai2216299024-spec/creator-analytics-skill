@@ -94,7 +94,7 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
             print("📰 正在访问微信公众号后台...")
             page.goto(APPMSG_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
-            if is_login_page(page):
+            if is_relogin_page(page) or is_login_page(page):
                 if headless:
                     result["collection_status"] = "login_required"
                     result["login_status"] = "expired_headless"
@@ -135,6 +135,8 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
             else:
                 empty_status = classify_empty_page(page, target_date_str)
                 result.update(empty_status)
+                if result.get("collection_status") in {"list_unreadable", "login_required", "failed"}:
+                    result["error"] = f"微信公众号列表不可确认：{result.get('empty_reason') or result.get('collection_status')}"
                 print(f"📭 公众号未抓到目标日期内容：{empty_status.get('empty_reason')}")
         except Exception as e:
             if result.get("collection_status") == "pending":
@@ -159,7 +161,7 @@ def mark_browser_launch_failure(result: dict, error: Exception):
 
 def verify_backend_access(page, result: dict):
     """Fail loudly when WeChat still shows login after a manual/profile login attempt."""
-    if not is_login_page(page):
+    if is_backend_page(page):
         return
     if result.get("login_status") == "manual_login_completed":
         result["login_status"] = "manual_login_not_accepted"
@@ -226,8 +228,18 @@ def is_login_page(page) -> bool:
     except Exception:
         return False
     login_markers = ["微信公众平台", "扫码登录", "请使用微信扫描二维码", "登录"]
-    backend_markers = ["首页", "新的创作", "发表记录", "内容管理", "统计"]
-    return any(marker in text for marker in login_markers) and not any(marker in text for marker in backend_markers)
+    return any(marker in text for marker in login_markers) and not is_backend_page(page)
+
+
+def is_backend_page(page) -> bool:
+    try:
+        text = page.inner_text("body", timeout=5000)
+        url = page.url
+    except Exception:
+        return False
+    backend_markers = ["首页", "新的创作", "发表记录", "内容管理", "统计", "群发", "已发表"]
+    backend_urls = ("cgi-bin/home", "cgi-bin/appmsgpublish", "cgi-bin/appmsg", "cgi-bin/newoperatevote")
+    return any(marker in text for marker in backend_markers) or any(marker in url for marker in backend_urls)
 
 
 def is_relogin_page(page) -> bool:
@@ -249,10 +261,8 @@ def open_login_entry(page):
 def wait_until_logged_in(page, timeout_ms: int):
     deadline = datetime.datetime.now() + datetime.timedelta(milliseconds=timeout_ms)
     while datetime.datetime.now() < deadline:
-        if not is_login_page(page):
-            page.wait_for_timeout(3000)
-            if not is_login_page(page):
-                return
+        if is_backend_page(page):
+            return
         page.wait_for_timeout(2000)
     raise PlaywrightTimeout("等待微信公众号扫码登录超时")
 

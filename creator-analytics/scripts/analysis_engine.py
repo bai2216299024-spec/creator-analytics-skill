@@ -314,11 +314,33 @@ def compare_metrics(item: dict, median: dict) -> list[str]:
     return comparisons or ["样本指标不足，先按内容结构和互动信号判断"]
 
 
-def platform_summaries(items: list[dict], diagnostics: list[dict]) -> list[dict]:
+def platform_summaries(items: list[dict], diagnostics: list[dict], daily_data: dict[str, dict | None] | None = None) -> list[dict]:
     summaries = []
-    for platform in PLATFORM_NAMES.values():
+    daily_data = daily_data or {}
+    for platform_key, platform in PLATFORM_NAMES.items():
         platform_items = [item for item in items if item.get("platform") == platform]
         if not platform_items:
+            source_data = daily_data.get(platform_key) or {}
+            if source_data.get("error"):
+                status = source_data.get("collection_status") or "failed"
+                reason = source_data.get("empty_reason") or source_data.get("error")
+                summaries.append({
+                    "platform": platform,
+                    "summary": f"采集失败：{status}（{reason}）",
+                    "items": 0,
+                    "collection_status": status,
+                })
+                continue
+            status = source_data.get("collection_status")
+            if status in {"list_unreadable", "login_required", "failed"}:
+                reason = source_data.get("empty_reason") or status
+                summaries.append({
+                    "platform": platform,
+                    "summary": f"采集未确认：{status}（{reason}）",
+                    "items": 0,
+                    "collection_status": status,
+                })
+                continue
             summaries.append({"platform": platform, "summary": "无新增发布或无可分析内容", "items": 0})
             continue
         total_views = sum(metric(item, "views") for item in platform_items)
@@ -505,7 +527,7 @@ def analyze_daily_data(daily_data: dict[str, dict | None], history: list[dict], 
         "content_diagnostics": diagnostics,
         "distribution_diagnosis": build_distribution_diagnosis(items, diagnostics),
         "comment_insights": summarize_comment_insights(items),
-        "platform_summaries": platform_summaries(items, diagnostics),
+        "platform_summaries": platform_summaries(items, diagnostics, daily_data),
         "cross_platform": build_cross_platform_summary(diagnostics),
         "next_content": build_next_content(items, diagnostics),
     }

@@ -14,19 +14,21 @@ from comments_utils import (
     summarize_comment_insights,
 )
 from generate_report import build_comments_section, build_platform_section
-from scrape_wechat import classify_empty_page, is_relogin_page, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access
+from scrape_wechat import classify_empty_page, is_relogin_page, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access, wait_until_logged_in
 
 
 class FakePage:
     def __init__(self, text):
         self.text = text
         self.visited_urls = []
+        self.url = "https://mp.weixin.qq.com/"
 
     def inner_text(self, selector, timeout=0):
         return self.text
 
     def goto(self, url, wait_until=None, timeout=0):
         self.visited_urls.append(url)
+        self.url = url
         self.text = "微信公众平台\n扫码登录\n请使用微信扫描二维码"
 
     def wait_for_timeout(self, timeout):
@@ -304,6 +306,12 @@ class CommentsPipelineTests(unittest.TestCase):
         self.assertEqual(result["empty_reason"], "browser_profile_locked")
         self.assertEqual(result["login_status"], "browser_launch_failed")
         self.assertIn("profile", result["error"])
+
+    def test_wechat_wait_until_logged_in_requires_backend_marker(self):
+        page = FakePage("微信公众平台\n扫码登录\n请使用微信扫描二维码")
+
+        with self.assertRaises(Exception):
+            wait_until_logged_in(page, timeout_ms=1)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ This file records user-facing improvements for every GitHub update. Keep it read
 - Added WeChat "please re-login" page handling: jump to the real scan-login entry instead of waiting on a dead-end page.
 - Converted WeChat browser/profile launch failures into structured reportable errors instead of raw Playwright tracebacks.
 - Prevented duplicate WeChat headed retries after the scheduler has already run WeChat in a visible browser.
+- Tightened WeChat login success detection: scan-login pages no longer count as logged in unless backend markers or backend URLs are visible.
+- Treat WeChat list_unreadable/backend_not_confirmed as a collection failure instead of a successful empty result.
 - Changed the daily scheduler so WeChat Official Account collection runs with a visible browser first when auto-login is enabled.
 - Kept dry-run, explicit --headed, and --no-auto-login behavior unchanged.
 - Added regression coverage for the WeChat headed-first path and the no-auto-login path.
@@ -26,6 +28,8 @@ This file records user-facing improvements for every GitHub update. Keep it read
 - The collector no longer waits on the blank "请重新登录" page; it redirects to the login entry or fails with a clear login_required status.
 - If an existing WeChat collection browser is still using the persistent profile, the report now says browser_profile_locked and asks the user to close the old window before retrying.
 - WeChat login failure now prompts once per run instead of retrying the same headed attempt twice.
+- Waiting for WeChat login now requires reaching the backend page, reducing false manual_login_not_accepted results caused by premature continuation.
+- Platform summaries now report WeChat unreadable states as "采集未确认/采集失败" instead of "无新增发布或无可分析内容".
 - Other platforms still use the normal retry flow, so the change is scoped to the platform with the unstable headless session.
 
 ### Verification

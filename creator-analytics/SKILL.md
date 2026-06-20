@@ -194,6 +194,10 @@ If Playwright cannot launch the WeChat persistent profile because another browse
 
 Because WeChat is already run with a visible browser when auto-login is enabled, the scheduler must not retry the same WeChat collection a second time with --headed after that headed attempt fails.
 
+WeChat login success must be based on backend evidence, not merely "the page no longer looks like a login page." Wait for backend text such as 首页 / 发表记录 / 内容管理 or backend URLs such as cgi-bin/appmsgpublish before continuing.
+
+Treat WeChat collection_status=list_unreadable or empty_reason=backend_not_confirmed as a failed/uncertain collection, not as no-new-publish. Platform summaries must say collection failed or unconfirmed.
+
 ## Validation
 
 After copying or editing this skill, run:
