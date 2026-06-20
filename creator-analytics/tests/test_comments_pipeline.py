@@ -14,7 +14,7 @@ from comments_utils import (
     summarize_comment_insights,
 )
 from generate_report import build_comments_section, build_platform_section
-from scrape_wechat import classify_empty_page, is_relogin_page, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access, wait_until_logged_in
+from scrape_wechat import classify_empty_page, is_relogin_page, launch_wechat_context, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access, wait_until_logged_in
 
 
 class FakePage:
@@ -312,6 +312,22 @@ class CommentsPipelineTests(unittest.TestCase):
 
         with self.assertRaises(Exception):
             wait_until_logged_in(page, timeout_ms=1)
+
+    def test_wechat_launch_prefers_system_chrome_channel(self):
+        calls = []
+
+        class FakeChromium:
+            def launch_persistent_context(self, **kwargs):
+                calls.append(kwargs)
+                return "context"
+
+        class FakePlaywright:
+            chromium = FakeChromium()
+
+        context = launch_wechat_context(FakePlaywright(), headless=False, browser_channel="chrome")
+
+        self.assertEqual(context, "context")
+        self.assertEqual(calls[0]["channel"], "chrome")
 
 
 if __name__ == "__main__":

@@ -35,6 +35,8 @@ def parse_args():
     parser.add_argument("--date", default=None, help="目标日期 YYYY-MM-DD，默认昨天")
     parser.add_argument("--comments-limit", type=int, default=50, help="每条内容最多采集的评论数，默认 50")
     parser.add_argument("--skip-comments", action="store_true", help="跳过评论明细采集")
+    parser.add_argument("--browser-channel", default="chrome", choices=["chrome", "msedge", "chromium"],
+                        help="公众号采集优先使用的浏览器通道，默认 chrome；不可用时回退 chromium")
     return parser.parse_args()
 
 
@@ -60,7 +62,15 @@ def profile_init_notice(profile_exists: bool, cookie_exists: bool) -> str:
     return ""
 
 
-def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_date_str: str, comments_limit: int = 50, skip_comments: bool = False) -> dict:
+def scrape_wechat(
+    cookie_path: str,
+    output_path: str,
+    headless: bool,
+    target_date_str: str,
+    comments_limit: int = 50,
+    skip_comments: bool = False,
+    browser_channel: str = "chrome",
+) -> dict:
     result = {
         "platform": PLATFORM,
         "date": target_date_str,
@@ -77,14 +87,7 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
 
     with sync_playwright() as p:
         try:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(DEFAULT_PROFILE_DIR),
-                headless=headless,
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-                viewport={"width": 1440, "height": 900},
-                locale="zh-CN",
-                timezone_id="Asia/Shanghai",
-            )
+            context = launch_wechat_context(p, headless, browser_channel)
         except Exception as e:
             mark_browser_launch_failure(result, e)
             print(f"❌ 微信公众号浏览器启动失败: {result['error']}")
@@ -146,6 +149,37 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
         finally:
             context.close()
     return result
+
+
+def launch_wechat_context(playwright, headless: bool, browser_channel: str):
+    channels = []
+    if browser_channel and browser_channel != "chromium":
+        channels.append(browser_channel)
+    channels.append(None)
+    last_error = None
+    for channel in channels:
+        try:
+            launch_options = {
+                "user_data_dir": str(DEFAULT_PROFILE_DIR),
+                "headless": headless,
+                "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                "viewport": {"width": 1440, "height": 900},
+                "locale": "zh-CN",
+                "timezone_id": "Asia/Shanghai",
+            }
+            if channel:
+                launch_options["channel"] = channel
+                print(f"🌐 微信公众号采集使用系统浏览器通道: {channel}")
+            else:
+                print("🌐 微信公众号采集回退到 Playwright Chromium")
+            return playwright.chromium.launch_persistent_context(**launch_options)
+        except Exception as exc:
+            last_error = exc
+            if channel:
+                print(f"⚠️ 系统浏览器通道 {channel} 启动失败，准备回退 Chromium: {exc}")
+                continue
+            raise
+    raise last_error
 
 
 def mark_browser_launch_failure(result: dict, error: Exception):
@@ -472,7 +506,15 @@ def main():
             "login_status": "not_checked",
         }
     else:
-        result = scrape_wechat(args.cookie_file, args.output_dir, not args.headed, date_str, args.comments_limit, args.skip_comments)
+        result = scrape_wechat(
+            args.cookie_file,
+            args.output_dir,
+            not args.headed,
+            date_str,
+            args.comments_limit,
+            args.skip_comments,
+            args.browser_channel,
+        )
     save_output(result, args.output_dir)
     return 0 if not result.get("error") else 1
 
