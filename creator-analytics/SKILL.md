@@ -182,6 +182,8 @@ After successful login, later runs should reuse the saved browser state. If a la
 
 WeChat Official Account uses data/browser/wechat_profile/ as the primary login state so the backend session survives better than storage-state cookies alone. Cookie JSON remains a diagnostic backup; if profile state does not exist, run headed once to establish wechat_profile.
 
+When auto-login is enabled, run_all.py runs WeChat collection with --headed first because mp.weixin.qq.com may challenge headless browser sessions even when the persistent profile exists. --dry-run, explicit --headed, and --no-auto-login keep their normal behavior.
+
 ## Validation
 
 After copying or editing this skill, run:

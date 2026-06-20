@@ -2,6 +2,28 @@
 
 This file records user-facing improvements for every GitHub update. Keep it readable for creators and portable for other agents.
 
+## 2026-06-21
+
+### Optimized
+
+- Changed the daily scheduler so WeChat Official Account collection runs with a visible browser first when auto-login is enabled.
+- Kept dry-run, explicit --headed, and --no-auto-login behavior unchanged.
+- Added regression coverage for the WeChat headed-first path and the no-auto-login path.
+
+### Why It Matters
+
+- The WeChat backend can challenge headless browser sessions even when a persistent profile exists.
+- Running WeChat headed first avoids a false "login expired" pass and makes daily review behavior easier to understand.
+- Other platforms still use the normal retry flow, so the change is scoped to the platform with the unstable headless session.
+
+### Verification
+
+- Targeted login retry unit test passed.
+- Full unit test suite passed.
+- Skill validation passed.
+- Dry-run WeChat workflow passed without opening a browser.
+- Privacy scan confirmed no real account names, cookies, profiles, history, reports, or logs are included in the public repo copy.
+
 ## 2026-06-20
 
 ### Optimized

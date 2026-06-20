@@ -108,13 +108,18 @@ def platform_requires_login(platform: str) -> bool:
 
 def run_platform(platform: str, script_name: str, common_args: list[str], auto_login: bool) -> int:
     """Run one platform collector, retrying once with a visible browser if login is required."""
-    code = run_script(script_name, *common_args)
+    run_args = list(common_args)
+    if platform == "wechat" and auto_login and "--headed" not in run_args:
+        print("\n🔑 微信公众号后台对无头浏览器登录态不稳定，优先使用可见浏览器复用 profile。")
+        run_args.append("--headed")
+
+    code = run_script(script_name, *run_args)
     if code == 0 or not auto_login:
         return code
 
     if platform_requires_login(platform):
         print(f"\n🔑 {platform} 需要登录，自动打开浏览器重试。请在浏览器中扫码/完成登录。")
-        headed_args = list(common_args)
+        headed_args = list(run_args)
         if "--headed" not in headed_args:
             headed_args.append("--headed")
         return run_script(script_name, *headed_args)
