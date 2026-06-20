@@ -39,6 +39,11 @@ class RunAllLoginRetryTests(unittest.TestCase):
         self.assertEqual(calls[0], ("scrape_wechat.py", ("--date", "2026-06-18")))
         self.assertEqual(calls[1], ("scrape_wechat.py", ("--date", "2026-06-18", "--headed")))
 
+    def test_common_args_include_comment_options(self):
+        args = run_all.build_common_args("2026-06-18", headed=False, dry_run=False, comments_limit=25, skip_comments=True)
+
+        self.assertEqual(args, ["--date", "2026-06-18", "--comments-limit", "25", "--skip-comments"])
+
 
 if __name__ == "__main__":
     unittest.main()

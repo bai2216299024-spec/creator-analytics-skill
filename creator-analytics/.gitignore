@@ -5,6 +5,7 @@ data/logs/
 data/history/*.jsonl
 data/output/*.json
 data/output/*.md
+config/self_accounts.json
 
 # Python and local tool caches.
 __pycache__/

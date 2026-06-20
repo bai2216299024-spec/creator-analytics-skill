@@ -6,6 +6,11 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 ### Optimized
 
+- Upgraded WeChat Official Account login persistence from storage-state cookies only to a persistent browser profile.
+- Added cross-platform comment-detail collection with comments_detail and comment_collection_status.
+- Added creator-account comment classification through private config/self_accounts.json.
+- Added comment insights to JSON analysis and Markdown reports, including other-user comments, self replies, unanswered questions, and next-topic candidates.
+- Added --comments-limit and --skip-comments to the daily workflow.
 - Added a required GitHub update rule: every future push must include a changelog entry describing what was optimized.
 - Documented the release checklist in SKILL.md so other agents know to update this file before committing.
 
@@ -13,12 +18,14 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 - GitHub history now explains product-level improvements, not only code diffs.
 - Future skill users can quickly see whether a version improved collection, diagnosis, automation, privacy, or content recommendations.
+- Daily reports can now use real audience comments for next-topic decisions while keeping creator replies separate.
 
 ### Verification
 
 - Skill validation passed.
 - Unit tests passed.
-- Documentation-only update; no runtime private data was added.
+- Dry-run workflow passed with comments options.
+- Privacy scan confirmed runtime private data and real self-account config are excluded.
 
 ## 2026-06-19
 

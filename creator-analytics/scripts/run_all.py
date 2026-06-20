@@ -30,6 +30,10 @@ def parse_args():
                         help="模拟运行，不实际采集")
     parser.add_argument("--no-auto-login", action="store_true",
                         help="检测到登录过期时不自动打开浏览器重试")
+    parser.add_argument("--comments-limit", type=int, default=50,
+                        help="每条内容最多采集的评论数，默认 50")
+    parser.add_argument("--skip-comments", action="store_true",
+                        help="跳过评论明细采集，只采集基础指标")
     return parser.parse_args()
 
 
@@ -55,6 +59,17 @@ def run_script(script_name: str, *extra_args) -> int:
 
     result = subprocess.run(cmd, cwd=str(SKILL_DIR))
     return result.returncode
+
+
+def build_common_args(report_date: str, headed: bool, dry_run: bool, comments_limit: int, skip_comments: bool) -> list[str]:
+    common_args = ["--date", report_date, "--comments-limit", str(comments_limit)]
+    if headed:
+        common_args.append("--headed")
+    if dry_run:
+        common_args.append("--dry-run")
+    if skip_comments:
+        common_args.append("--skip-comments")
+    return common_args
 
 
 PLATFORM_OUTPUT_FILES = {
@@ -116,11 +131,7 @@ def main():
     print(f"  平台: {'全部' if args.platform == 'all' else args.platform}")
     print(f"{'=' * 70}")
 
-    common_args = ["--date", report_date]
-    if args.headed:
-        common_args.append("--headed")
-    if args.dry_run:
-        common_args.append("--dry-run")
+    common_args = build_common_args(report_date, args.headed, args.dry_run, args.comments_limit, args.skip_comments)
     auto_login = not args.headed and not args.dry_run and not args.no_auto_login
 
     exit_codes = {}

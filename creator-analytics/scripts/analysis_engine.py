@@ -9,6 +9,8 @@ import statistics
 from pathlib import Path
 from typing import Any
 
+from comments_utils import summarize_comment_insights
+
 PLATFORM_NAMES = {
     "xhs": "小红书",
     "douyin": "抖音",
@@ -107,6 +109,8 @@ def normalize_platform_data(platform_key: str, data: dict | None) -> list[dict]:
                 "metrics": metrics,
                 "source_url": raw.get("source_url"),
                 "detail_url": raw.get("detail_url"),
+                "comments_detail": raw.get("comments_detail") or [],
+                "comment_collection_status": raw.get("comment_collection_status"),
                 "collection_status": raw.get("collection_status") or "ok",
             }
         )
@@ -500,6 +504,7 @@ def analyze_daily_data(daily_data: dict[str, dict | None], history: list[dict], 
         },
         "content_diagnostics": diagnostics,
         "distribution_diagnosis": build_distribution_diagnosis(items, diagnostics),
+        "comment_insights": summarize_comment_insights(items),
         "platform_summaries": platform_summaries(items, diagnostics),
         "cross_platform": build_cross_platform_summary(diagnostics),
         "next_content": build_next_content(items, diagnostics),

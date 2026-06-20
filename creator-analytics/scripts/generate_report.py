@@ -176,6 +176,58 @@ def build_distribution_section(analysis: dict) -> str:
     return "\n".join(lines)
 
 
+def build_comments_section(analysis: dict) -> str:
+    insights = analysis.get("comment_insights") or {}
+    lines = ["## 评论洞察", ""]
+    total = insights.get("total_comments", 0)
+    if not total:
+        lines.extend(["暂无可分析评论。", ""])
+        failures = insights.get("collection_failures") or []
+        for failure in failures:
+            lines.append(f"- 评论采集失败：{failure.get('platform') or '-'}「{failure.get('title') or '-'}」：{failure.get('status')}")
+        if failures:
+            lines.append("")
+        return "\n".join(lines)
+
+    lines.append(
+        f"- **评论总量**: {total}；他人评论 {insights.get('other_comments', 0)}；"
+        f"自己账号回复 {insights.get('self_comments', 0)}；回复覆盖 {insights.get('self_reply_coverage', '0/0')}"
+    )
+    render_comment_lines(lines, "他人评论摘要", insights.get("other_summary") or [])
+    render_comment_lines(lines, "自己账号回复摘要", insights.get("self_summary") or [])
+    render_comment_refs(lines, "未回复但值得回复的问题", insights.get("unanswered_questions") or [])
+    render_comment_refs(lines, "可直接变成下一期选题的评论", insights.get("next_topic_candidates") or [])
+    failures = insights.get("collection_failures") or []
+    if failures:
+        lines.append("**评论采集异常**")
+        for failure in failures:
+            lines.append(f"- {failure.get('platform') or '-'}「{failure.get('title') or '-'}」：{failure.get('status')}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_comment_lines(lines: list[str], title: str, values: list[str]):
+    lines.append(f"**{title}**")
+    if not values:
+        lines.append("- 暂无")
+    else:
+        lines.extend(f"- {value}" for value in values)
+    lines.append("")
+
+
+def render_comment_refs(lines: list[str], title: str, refs: list[dict]):
+    lines.append(f"**{title}**")
+    if not refs:
+        lines.append("- 暂无")
+    else:
+        for ref in refs[:5]:
+            content = (ref.get("content") or "").replace("\n", " ")
+            if len(content) > 80:
+                content = content[:78] + "..."
+            lines.append(f"- {ref.get('platform') or '-'}「{ref.get('title') or '-'}」：{content}")
+    lines.append("")
+
+
 def build_next_content(analysis: dict) -> str:
     plan = analysis.get("next_content") or {}
     xhs = plan.get("xhs", {})
@@ -230,6 +282,7 @@ def build_report(daily_data: dict, analysis: dict, report_date: str) -> str:
         build_platform_section("wechat", daily_data.get("wechat")),
         build_platform_summary(analysis),
         build_distribution_section(analysis),
+        build_comments_section(analysis),
         build_diagnostics(analysis),
         build_next_content(analysis),
         "---",

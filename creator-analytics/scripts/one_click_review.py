@@ -24,6 +24,8 @@ def parse_args():
     parser.add_argument("--platform", choices=["xhs", "douyin", "wechat", "all"], default="all", help="平台，默认全部")
     parser.add_argument("--headed", action="store_true", help="打开浏览器窗口，适合首次登录或排错")
     parser.add_argument("--data-dir", default=None, help="运行态目录，保存登录态和报告；默认使用 skill/data")
+    parser.add_argument("--comments-limit", type=int, default=50, help="每条内容最多采集的评论数，默认 50")
+    parser.add_argument("--skip-comments", action="store_true", help="跳过评论明细采集，只采集基础指标")
     return parser.parse_args()
 
 
@@ -49,6 +51,9 @@ def main() -> int:
     cmd = [sys.executable, str(SCRIPT_DIR / "run_all.py"), "--date", report_date, "--platform", args.platform]
     if args.headed:
         cmd.append("--headed")
+    cmd.extend(["--comments-limit", str(args.comments_limit)])
+    if args.skip_comments:
+        cmd.append("--skip-comments")
 
     code = subprocess.call(cmd, cwd=str(SKILL_DIR))
     report_path = output_dir() / f"report_{report_date}.md"

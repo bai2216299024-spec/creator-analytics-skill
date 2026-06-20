@@ -13,13 +13,16 @@ from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
-from paths import cookie_file, output_dir
+from comments_utils import enrich_items_with_comments, load_self_accounts
+from paths import config_dir, cookie_file, output_dir, profile_dir
 
 PLATFORM = "微信公众号"
 HOME_URL = "https://mp.weixin.qq.com/"
 APPMSG_URL = "https://mp.weixin.qq.com/cgi-bin/appmsgpublish"
 DEFAULT_COOKIE_FILE = cookie_file("wechat")
 DEFAULT_OUTPUT_DIR = output_dir()
+DEFAULT_PROFILE_DIR = profile_dir("wechat")
+DEFAULT_SELF_ACCOUNTS_FILE = config_dir() / "self_accounts.json"
 
 
 def parse_args():
@@ -29,6 +32,8 @@ def parse_args():
     parser.add_argument("--headed", action="store_true", help="打开浏览器窗口（首次登录用）")
     parser.add_argument("--dry-run", action="store_true", help="模拟运行，不实际采集")
     parser.add_argument("--date", default=None, help="目标日期 YYYY-MM-DD，默认昨天")
+    parser.add_argument("--comments-limit", type=int, default=50, help="每条内容最多采集的评论数，默认 50")
+    parser.add_argument("--skip-comments", action="store_true", help="跳过评论明细采集")
     return parser.parse_args()
 
 
@@ -46,17 +51,17 @@ def save_cookies(context, path: str):
     print(f"✅ 微信公众号 Cookies 已保存到 {path}")
 
 
-def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_date_str: str) -> dict:
+def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_date_str: str, comments_limit: int = 50, skip_comments: bool = False) -> dict:
     result = {"platform": PLATFORM, "date": target_date_str, "items": [], "empty": True, "error": None}
-    storage_state = str(cookie_path) if Path(cookie_path).exists() else None
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
-        context = browser.new_context(
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(DEFAULT_PROFILE_DIR),
+            headless=headless,
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
             viewport={"width": 1440, "height": 900},
             locale="zh-CN",
             timezone_id="Asia/Shanghai",
-            storage_state=storage_state,
         )
         page = context.new_page()
         try:
@@ -76,7 +81,14 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
 
             items = parse_items(page, target_date_str)
             if items:
-                result["items"] = dedupe_items(items)
+                result["items"] = enrich_items_with_comments(
+                    context,
+                    dedupe_items(items),
+                    "wechat",
+                    load_self_accounts(DEFAULT_SELF_ACCOUNTS_FILE),
+                    comments_limit,
+                    skip_comments,
+                )
                 result["empty"] = False
                 print(f"🎯 找到 {len(result['items'])} 条昨日公众号内容")
             else:
@@ -85,7 +97,7 @@ def scrape_wechat(cookie_path: str, output_path: str, headless: bool, target_dat
             result["error"] = str(e)
             print(f"❌ 微信公众号采集异常: {e}")
         finally:
-            browser.close()
+            context.close()
     return result
 
 
@@ -306,7 +318,7 @@ def main():
     if args.dry_run:
         result = {"platform": PLATFORM, "date": date_str, "items": [], "empty": True, "error": None}
     else:
-        result = scrape_wechat(args.cookie_file, args.output_dir, not args.headed, date_str)
+        result = scrape_wechat(args.cookie_file, args.output_dir, not args.headed, date_str, args.comments_limit, args.skip_comments)
     save_output(result, args.output_dir)
     return 0 if not result.get("error") else 1
 

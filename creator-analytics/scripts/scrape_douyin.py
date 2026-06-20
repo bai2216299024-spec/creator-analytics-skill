@@ -16,7 +16,8 @@ import re
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-from paths import cookie_file, output_dir
+from comments_utils import enrich_items_with_comments, load_self_accounts
+from paths import config_dir, cookie_file, output_dir
 
 PLATFORM = "抖音"
 BASE_URL = "https://creator.douyin.com"
@@ -26,6 +27,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_COOKIE_FILE = cookie_file("douyin")
 DEFAULT_OUTPUT_DIR = output_dir()
+DEFAULT_SELF_ACCOUNTS_FILE = config_dir() / "self_accounts.json"
 
 
 def parse_args():
@@ -40,6 +42,10 @@ def parse_args():
                         help="模拟运行，不实际采集")
     parser.add_argument("--date", default=None,
                         help="目标日期 YYYY-MM-DD，默认昨天")
+    parser.add_argument("--comments-limit", type=int, default=50,
+                        help="每条内容最多采集的评论数，默认 50")
+    parser.add_argument("--skip-comments", action="store_true",
+                        help="跳过评论明细采集")
     return parser.parse_args()
 
 
@@ -67,7 +73,7 @@ def save_cookies(context, cookie_file: str):
     print(f"✅ Cookies 已保存到 {cookie_file}")
 
 
-def scrape_douyin(cookie_file: str, output_dir: str, headless: bool, target_date_str: str) -> dict:
+def scrape_douyin(cookie_file: str, output_dir: str, headless: bool, target_date_str: str, comments_limit: int = 50, skip_comments: bool = False) -> dict:
     """采集抖音内容数据"""
     result = {
         "platform": PLATFORM,
@@ -185,6 +191,14 @@ def scrape_douyin(cookie_file: str, output_dir: str, headless: bool, target_date
 
             if target_items:
                 target_items = dedupe_items(target_items)
+                target_items = enrich_items_with_comments(
+                    context,
+                    target_items,
+                    "douyin",
+                    load_self_accounts(DEFAULT_SELF_ACCOUNTS_FILE),
+                    comments_limit,
+                    skip_comments,
+                )
                 result["items"] = target_items
                 result["empty"] = False
                 print(f"🎯 找到 {len(target_items)} 条昨日发布的内容")
@@ -216,6 +230,9 @@ def parse_content_card(element, target_date_str: str) -> dict | None:
         "likes": 0,
         "comments": 0,
     }
+    href = extract_first_href(element)
+    if href:
+        entry["detail_url"] = href
 
     lines = [l.strip() for l in text.split("\n") if l.strip()]
 
@@ -249,6 +266,20 @@ def parse_content_card(element, target_date_str: str) -> dict | None:
         return None
 
     return entry
+
+
+def extract_first_href(element) -> str | None:
+    link = element.query_selector("a[href]")
+    if not link:
+        return None
+    href = link.get_attribute("href")
+    if not href:
+        return None
+    if href.startswith("//"):
+        return "https:" + href
+    if href.startswith("/"):
+        return BASE_URL + href
+    return href
 
 
 def parse_content_via_page_text(page, target_date_str: str) -> list[dict]:
@@ -486,7 +517,7 @@ def main():
             "error": None,
         }
     else:
-        result = scrape_douyin(args.cookie_file, args.output_dir, headless, target_date_str)
+        result = scrape_douyin(args.cookie_file, args.output_dir, headless, target_date_str, args.comments_limit, args.skip_comments)
 
     save_output(result, args.output_dir)
     return 0 if not result.get("error") else 1

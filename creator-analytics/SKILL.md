@@ -24,6 +24,8 @@ python scripts/one_click_review.py --platform douyin
 python scripts/one_click_review.py --platform wechat
 python scripts/one_click_review.py --platform all
 python scripts/one_click_review.py --headed
+python scripts/one_click_review.py --comments-limit 50
+python scripts/one_click_review.py --skip-comments
 python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 ```
 
@@ -51,7 +53,9 @@ The workflow performs:
 4. Compare each item against same-platform, same-content-type account history. Use the latest 30 items; if fewer than 5 exist, use fallback thresholds and mark low confidence.
 5. Read optional benchmark account config from `config/benchmark_accounts.json`. If absent, clearly state external benchmarking is not configured.
 6. Diagnose distribution anomalies such as low reach with high engagement, content-entry weakness, and multi-platform slump.
-7. Generate Markdown and JSON outputs:
+7. Collect comment details where detail/comment pages are available. Default to 50 comments per content item; use --skip-comments for faster metric-only runs.
+8. Separate other-user comments from the creator's own replies using config/self_accounts.json when present.
+9. Generate Markdown and JSON outputs:
    - `data/output/report_YYYY-MM-DD.md`
    - `data/output/analysis_YYYY-MM-DD.json`
 
@@ -76,6 +80,7 @@ Do not only summarize metrics. Use the report to answer:
 - **为什么好**: Identify the topic, hook, structure, save value, comment potential, or share-worthy conclusion that drove performance.
 - **如何固定下来**: Convert working patterns into reusable title formulas, hook formulas, content structures, comment prompts, and platform-specific formats.
 - **是否疑似限流/分发异常**: Distinguish content weakness from distribution issues. Treat low reach with strong interaction as possible initial recommendation-pool weakness; treat all-platform low reach and low interaction as account/topic-stage anomaly; never state hard platform punishment without evidence.
+- **评论怎么用**: Treat is_self=false comments as user demand, questions, objections, or content clues. Treat is_self=true comments as reply coverage and interaction design, not as external audience demand.
 
 ## Distribution / Limit Diagnosis
 
@@ -109,6 +114,20 @@ config/benchmark_accounts.example.json -> config/benchmark_accounts.json
 ```
 
 If no benchmark config exists, the report must say `未配置对标账号` and continue using account history. When benchmark accounts are configured, use them as a future extension point for same-platform topic and interaction-structure comparison; do not block the daily report if benchmark collection is unavailable.
+
+## Comment Collection
+
+By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is best-effort: if a platform detail page is unavailable or the page structure changes, keep the base metrics and mark comment_collection_status instead of failing the whole report.
+
+Each comment uses: comment_id, author_name, author_role, content, publish_time, like_count, reply_to, is_self, source_area, and collection_status.
+
+Copy the example file before adding real account names:
+
+```text
+config/self_accounts.example.json -> config/self_accounts.json
+```
+
+self_accounts.json must stay private. Use it to list the creator's display names for xhs, douyin, and wechat; matching comments are marked is_self=true. Other comments are marked is_self=false; unknown author comments keep is_self=null.
 
 ## Portable Or Multi-Agent Use
 
@@ -154,6 +173,8 @@ python scripts/one_click_review.py --headed
 ```
 
 After successful login, later runs should reuse the saved browser state. If a later run detects expired login state, `run_all.py` will retry the failed platform once with `--headed` unless `--headed`, `--dry-run`, or `--no-auto-login` is already set.
+
+WeChat Official Account uses data/browser/wechat_profile/ as the primary login state so the backend session survives better than storage-state cookies alone. Cookie JSON remains a compatibility backup.
 
 ## Validation
 
