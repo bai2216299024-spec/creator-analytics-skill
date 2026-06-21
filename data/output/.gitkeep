@@ -1,0 +1,6 @@
+# 报告输出目录
+
+运行 run_all.py 后，此处会自动生成：
+- xhs_data.json
+- douyin_data.json
+- report_YYYY-MM-DD.md

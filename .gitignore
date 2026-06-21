@@ -1,0 +1,18 @@
+# Runtime state and private login data.
+data/browser/
+data/cookies/*.json
+data/logs/
+data/history/*.jsonl
+data/output/*.json
+data/output/*.md
+config/self_accounts.json
+config/wechat_api.json
+
+# Python and local tool caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environment files.
+.env
+.env.*

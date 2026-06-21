@@ -1,0 +1,7 @@
+# Cookie 文件目录
+
+首次运行 --headed 模式并完成登录后，此处会自动保存：
+- xhs_cookies.json
+- douyin_cookies.json
+
+删除对应文件即可强制重新登录。
