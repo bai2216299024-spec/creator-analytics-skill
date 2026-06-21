@@ -15,6 +15,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 from comments_utils import enrich_items_with_comments, load_self_accounts
 from paths import config_dir, cookie_file, output_dir, profile_dir
+from wechat_api_client import WeChatApiError, collect_wechat_api
 
 PLATFORM = "微信公众号"
 HOME_URL = "https://mp.weixin.qq.com/"
@@ -24,6 +25,8 @@ DEFAULT_COOKIE_FILE = cookie_file("wechat")
 DEFAULT_OUTPUT_DIR = output_dir()
 DEFAULT_PROFILE_DIR = profile_dir("wechat")
 DEFAULT_SELF_ACCOUNTS_FILE = config_dir() / "self_accounts.json"
+DEFAULT_API_CONFIG_FILE = config_dir() / "wechat_api.json"
+DEFAULT_API_TOKEN_CACHE_FILE = cookie_file("wechat_api_token")
 
 
 def parse_args():
@@ -80,7 +83,21 @@ def scrape_wechat(
         "collection_status": "pending",
         "empty_reason": None,
         "login_status": "unknown",
+        "collection_method": "web",
     }
+    api_result = try_collect_wechat_api(target_date_str, comments_limit, skip_comments)
+    if api_result.get("available") and not api_result.get("error"):
+        result["collection_method"] = "api"
+        result["login_status"] = "api_credentials"
+        result["items"] = api_result.get("items") or []
+        result["empty"] = not bool(result["items"])
+        result["collection_status"] = "ok" if result["items"] else "empty"
+        result["empty_reason"] = None if result["items"] else "no_matching_date"
+        if api_result.get("api_metric_errors"):
+            result["api_metric_errors"] = api_result["api_metric_errors"]
+        return result
+    result["api_status"] = api_result.get("error") or "api_not_configured"
+
     notice = profile_init_notice(DEFAULT_PROFILE_DIR.exists(), Path(cookie_path).exists())
     if notice:
         print(f"ℹ️ {notice}")
@@ -101,6 +118,7 @@ def scrape_wechat(
                 if headless:
                     result["collection_status"] = "login_required"
                     result["login_status"] = "expired_headless"
+                    result["empty_reason"] = "login_required"
                     raise RuntimeError("微信公众号登录态过期，请使用 --headed 模式扫码登录")
                 if is_relogin_page(page):
                     print("🔑 微信公众号显示“请重新登录”，正在跳转到扫码登录入口...")
@@ -149,6 +167,23 @@ def scrape_wechat(
         finally:
             context.close()
     return result
+
+
+def try_collect_wechat_api(target_date_str: str, comments_limit: int, skip_comments: bool) -> dict:
+    try:
+        api_result = collect_wechat_api(
+            DEFAULT_API_CONFIG_FILE,
+            DEFAULT_API_TOKEN_CACHE_FILE,
+            target_date_str,
+            comments_limit,
+            skip_comments,
+        )
+    except WeChatApiError as exc:
+        return {"available": True, "error": str(exc), "items": []}
+    if not api_result.get("available"):
+        return {"available": False, "error": api_result.get("error") or "api_not_configured", "items": []}
+    print("✅ 微信公众号使用官方 API 完成采集")
+    return api_result
 
 
 def launch_wechat_context(playwright, headless: bool, browser_channel: str):

@@ -6,6 +6,9 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 ### Optimized
 
+- Added WeChat Official Account API-first collection using private config/wechat_api.json, with browser collection as fallback.
+- Added config/wechat_api.example.json and kept the real credential file ignored by Git.
+- Added API collection tests for missing config and successful article/metric/comment normalization.
 - Added an anti-repeat next-content rule: high-performing content is now treated as evidence, not as the next topic to rewrite.
 - Added `source_reference`, `inherited_logic`, `avoid_repeating`, and `fresh_angle` to the JSON next-content plan.
 - Updated Markdown reports to show what logic should be inherited and what previous material must not be repeated.
@@ -15,6 +18,7 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 - Daily reviews should guide the next creation, not produce a polished repeat of yesterday's idea.
 - Other agents can now reuse the report safely because the JSON explicitly separates performance mechanism from content material.
+- WeChat browser backend collection is not stable enough for unattended production runs; official API credentials provide the reliable path.
 
 ### Verification
 

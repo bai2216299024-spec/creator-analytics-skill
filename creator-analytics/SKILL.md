@@ -119,6 +119,22 @@ For Meihua Yishu content, keep public-facing recommendations in `国学文化科
 - 抖音: collect views, likes, comments, and content type. Treat low views as a first-3-seconds/title-entry problem before over-optimizing later structure.
 - 微信公众号: collect article reads, likes, comments, and 在看 where visible. If a metric is hidden or unavailable, preserve it as `null` / `未取到`, not `0`.
 
+## WeChat Official Account Collection
+
+For production daily reviews, use official API credentials whenever possible:
+
+config/wechat_api.example.json -> config/wechat_api.json
+
+wechat_api.json is private and must not be committed. It needs the Official Account appid and appsecret.
+
+Behavior:
+
+1. scrape_wechat.py tries official API collection first.
+2. If API credentials are absent, it marks api_status=api_not_configured and falls back to the browser collector.
+3. If the browser collector hits login_required, the report must show collection failure instead of no-new-publish.
+4. API collection can retrieve published article records and official read/share/favorite statistics. Likes, comments, or 在看 may be unavailable on some account/API permission combinations; keep those fields as null.
+5. Browser collection remains a fallback for cases where API credentials are not configured, but it is not considered production-stable for unattended daily runs.
+
 ## Benchmark Accounts
 
 External benchmark accounts are optional in v1. Copy the example file before filling real accounts:
