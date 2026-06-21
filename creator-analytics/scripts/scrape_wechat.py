@@ -97,6 +97,13 @@ def scrape_wechat(
             result["api_metric_errors"] = api_result["api_metric_errors"]
         return result
     result["api_status"] = api_result.get("error") or "api_not_configured"
+    if api_result.get("available") and api_result.get("error"):
+        result["collection_method"] = "api"
+        result["collection_status"] = "failed"
+        result["empty_reason"] = "api_error"
+        result["login_status"] = "api_credentials"
+        result["error"] = api_result["error"]
+        return result
 
     notice = profile_init_notice(DEFAULT_PROFILE_DIR.exists(), Path(cookie_path).exists())
     if notice:
