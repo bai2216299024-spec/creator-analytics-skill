@@ -8,6 +8,7 @@ import argparse
 import datetime
 import json
 import sys
+import re
 from pathlib import Path
 
 from analysis_engine import analyze_daily_data, format_number, load_benchmark_config, load_json, metric, normalize_all
@@ -342,6 +343,72 @@ def build_report(daily_data: dict, analysis: dict, report_date: str) -> str:
     return "\n".join(lines)
 
 
+CONFIG_PATH = config_dir() / "zones_sync.json"
+
+# Mapping from report heading to platform key
+HEADING_PLATFORM_MAP = {
+    "## 小红书": "xhs",
+    "## 抖音": "douyin",
+    "## 微信公众号": "wechat",
+}
+
+
+def sync_to_zones(report_date: str, report_text: str):
+    """Split the multi-platform report and write per-platform files into zone folders.
+
+    Reads config/zones_sync.json.  If the file is missing or disabled, this
+    function returns silently so that the core report workflow is unaffected.
+    """
+    if not CONFIG_PATH.exists():
+        return
+    try:
+        config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        print(f"[WARN] zones_sync.json 格式有误，跳过同步")
+        return
+    if not config.get("enabled"):
+        return
+
+    zones_root = Path(config.get("zones_root", ""))
+    if not zones_root.is_dir():
+        print(f"[WARN] 工作区路径不存在，跳过同步: {zones_root}")
+        return
+
+    platforms = config.get("platforms", {})
+    file_name = f"{report_date}-指标日报.md"
+
+    # Split the report by platform headings
+    for heading, platform_key in HEADING_PLATFORM_MAP.items():
+        platform_cfg = platforms.get(platform_key)
+        if not platform_cfg:
+            continue
+        section = _extract_section(report_text, heading)
+        if section is None:
+            continue
+        target_dir = zones_root / platform_cfg["zone"] / platform_cfg["folder"]
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / file_name
+        try:
+            target_path.write_text(section, encoding="utf-8")
+            print(f"  [OK] 已同步 {platform_cfg['zone']}/{platform_cfg['folder']}/{file_name}")
+        except OSError as exc:
+            print(f"  [WARN] 写入失败 {target_path}: {exc}")
+
+
+def _extract_section(text: str, heading: str) -> str | None:
+    """Extract the section starting with *heading* until the next H2 or EOF."""
+    pattern = re.escape(heading) + r"\n"
+    match = re.search(pattern, text)
+    if not match:
+        return None
+    start = match.start()
+    rest = text[match.end():]
+    next_h2 = re.search(r"\n(?=## )", rest)
+    if next_h2:
+        return text[start: match.end() + next_h2.start()]
+    return text[start:]
+
+
 def main():
     args = parse_args()
     report_date = target_date(args.date)
@@ -376,6 +443,13 @@ def main():
 
     print(f"报告已保存到 {report_file}")
     print(f"分析 JSON 已保存到 {analysis_file}")
+
+    # Zone sync (optional — skipped silently if not configured)
+    try:
+        sync_to_zones(report_date, report)
+    except Exception as exc:
+        print(f"[WARN] 三专区同步出错（不影响报告生成）: {exc}")
+
     print("\n" + "=" * 70)
     print(report)
     return 0

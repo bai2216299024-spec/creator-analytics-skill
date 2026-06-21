@@ -200,7 +200,29 @@ Do not copy a live user's browser profile to an untrusted machine. Prefer a fres
 
 ## GitHub Update Rule
 
-When updating the public GitHub repository, always update CHANGELOG.md in the same commit. The changelog entry must explain:
+When updating the public GitHub repository, always update CHANGELOG.md in the same commit.
+
+## Zone Sync（可选）
+
+每日采集完成后，可将平台指标日报自动写入三专区的 `数据报表/` 文件夹。
+
+**首次配置**：首次运行 `one_click_review.py` 时会自动引导。也可随时单独运行：
+
+```bash
+python scripts/setup_zones.py
+```
+
+非交互模式（适合脚本/cron）：
+
+```bash
+python scripts/setup_zones.py --zones-root /path/to/workspace
+```
+
+配置保存在 `config/zones_sync.json`（自动加入 `.gitignore`，不会提交到 git）。未配置时同步功能静默跳过，不影响核心采集。
+
+同步文件命名规则：`YYYY-MM-DD-指标日报.md`
+
+## GitHub Update Rule The changelog entry must explain:
 
 - what was optimized
 - why the optimization matters to the creator workflow
