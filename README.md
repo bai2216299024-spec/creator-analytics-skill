@@ -16,3 +16,21 @@
 仓库不包含登录态、Cookie、浏览器 Profile、历史库、历史报告或个人运行日志。运行时数据默认会写入 `creator-analytics/data/`，该目录已通过 `.gitignore` 排除敏感文件。
 
 如需在其他机器或其他 Agent 使用，建议通过 `--data-dir` 指定独立运行目录，并在目标环境中重新登录平台账号。
+
+## 每日自动任务
+
+通过 Windows 任务计划程序设置每日自动复盘（默认凌晨 12 点执行）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File creator-analytics\scripts\install_windows_task.ps1 -At 00:00
+```
+
+可选参数：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File creator-analytics\scripts\install_windows_task.ps1 `
+    -TaskName CreatorAnalyticsDailyReview -At 00:00 `
+    -PythonExe C:\Path\to\python.exe -DataDir D:\creator-analytics-data
+```
+
+任务默认走生产模式（实际采集数据），如仅测试请手动传入 `--dry-run`。
