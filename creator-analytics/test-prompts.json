@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "统计昨天的小红书和抖音内容数据，生成复盘报告",
+    "expected": "采集前一天小红书和抖音发布的内容，生成包含指标对比、历史基准分析、分发诊断的Markdown复盘报告"
+  },
+  {
+    "id": 2,
+    "prompt": "分析为什么这周公众号文章数据特别差，是不是被限流了",
+    "expected": "对比公众号文章阅读量/点赞/在看与历史基准，诊断是内容入口弱还是平台分发问题，给出分级诊断（none/normal/content/platform/account）和恢复建议"
+  },
+  {
+    "id": 3,
+    "prompt": "对比昨天三个平台的内容表现，下一期应该做什么选题",
+    "expected": "跨平台对比各内容项表现，提取最佳表现内容的底层逻辑，选择不重复的新角度，输出source_reference/inherited_logic/avoid_repeating/fresh_angle"
+  }
+]

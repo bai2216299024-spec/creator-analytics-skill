@@ -59,12 +59,17 @@ The workflow performs:
    - `data/output/report_YYYY-MM-DD.md`
    - `data/output/analysis_YYYY-MM-DD.json`
 
+🔴 CHECKPOINT · 🛑 STOP: After data collection, review the output files briefly before proceeding to diagnosis. If a platform shows no data, confirm whether it had no new publish or collection failed before trusting the analysis.
+
 ## Daily Review Behavior
 
 For requests like `统计昨天数据`, `生成昨日复盘`, `分析为什么差`, `下一期做什么`, or scheduled daily review:
 
 1. Run `python scripts/one_click_review.py`.
 2. Read the generated Markdown report and JSON analysis when needed.
+
+   🔴 CHECKPOINT: Before presenting diagnosis, verify the report covers all expected platforms. If one platform is missing or shows collection failure, note it explicitly.
+
 3. Return the key diagnosis and next-content recommendation.
 4. If the user asks for execution-ready content, expand the included next-content plan into full Xiaohongshu copy, Douyin script, or WeChat article.
 
@@ -189,6 +194,8 @@ When another agent or machine needs this skill:
 python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 ```
 
+🔴 CHECKPOINT · 🛑 STOP: Before running on a new machine or new data directory, confirm the browser profile path is valid and login state is fresh. Never reuse a profile from another machine.
+
 Do not copy a live user's browser profile to an untrusted machine. Prefer a fresh login in the target environment.
 
 ## GitHub Update Rule
@@ -238,6 +245,41 @@ Because WeChat is already run with a visible browser when auto-login is enabled,
 WeChat login success must be based on backend evidence, not merely "the page no longer looks like a login page." Wait for backend text such as 首页 / 发表记录 / 内容管理 or backend URLs such as cgi-bin/appmsgpublish before continuing.
 
 Treat WeChat collection_status=list_unreadable or empty_reason=backend_not_confirmed as a failed/uncertain collection, not as no-new-publish. Platform summaries must say collection failed or unconfirmed.
+
+## 反例与黑名单（Anti-patterns）
+
+以下是本 skill 使用者常见的错误用法——它们看起来合理，但在实际执行中会导致错误结论或安全风险。
+
+### 🚫 数据类反例
+
+| 反例 | 为什么错 | 正确做法 |
+|------|----------|---------|
+| 把 `null` / `未取到` 指标当作 `0` | 平台未暴露该指标 ≠ 指标值为 0，会导致分析偏差 | 保持为 `null`，报告中标明「未取到」 |
+| 声称「平台限流/降权」而无确凿证据 | 绝大多数据差是内容本身问题，非平台惩罚 | 使用分级诊断(lv1-5)，无证据时标 `none` |
+| 用一个平台的诊断结论套用到另一个平台 | 各平台推荐机制不同，笔记/视频/文章的指标含义不同 | 按平台独立分析，跨平台对比仅看趋势，不看绝对值 |
+| 把采集失败当作「该日未发布」 | 登录过期/页面改版/网络问题都可能导致采集失败 | 标记 `collection_failed`，绝不混入「无新内容」 |
+
+### 🚫 内容生产类反例
+
+| 反例 | 为什么错 | 正确做法 |
+|------|----------|---------|
+| 直接重写或改编历史表现最好的内容作为下期选题 | 高价值文章的底层逻辑是复用的依据，不是素材本身 | 提取机制（hook/结构/互动设计），换场景/换角度 |
+| 把 `is_self=true`（创作者自己的回复）当成受众需求证据 | 创作者的回复不能代表读者诉求 | 仅用 `is_self=false` 且高置信度的评论驱动选题 |
+| 把无回复链的评论称为「未回答的问题」 | 没有 thread 信息就无法判断是否已回答 | 统一称「用户评论/高价值评论」 |
+
+### 🚫 安全类反例
+
+| 反例 | 为什么错 | 正确做法 |
+|------|----------|---------|
+| 把本机浏览器配置文件复制到不可信机器 | 包含登录态和 Cookie，泄露即账户风险 | 在新机器上重新扫码登录 |
+| 提交 `wechat_api.json` / `self_accounts.json` 到 git | 包含 API 密钥和账号名 | 加入 `.gitignore`，仅提交 `.example.json` |
+
+### 🚫 流程类反例
+
+| 反例 | 为什么错 | 正确做法 |
+|------|----------|---------|
+| 全量采集所有平台时，一个平台失败就放弃整个报告 | 其余平台数据仍然有效 | 标记失败平台为 `collection_failed`，继续处理其他平台 |
+| 在 headless 环境中运行未配置 API 的微信公众号采集 | 微信对 headless 浏览器有严格限制，导致死循环 | 先在 `--headed` 模式下建立登录态，或配置 API |
 
 ## Validation
 
