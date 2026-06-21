@@ -269,14 +269,28 @@ def build_next_content(analysis: dict) -> str:
     douyin = plan.get("douyin", {})
     wechat = plan.get("wechat", {})
     ab = plan.get("ab_test", {})
+    source = plan.get("source_reference") or {}
+    fresh_angle = plan.get("fresh_angle") or {}
     lines = [
         "## 下一期内容决策",
         "",
         f"- **优先选题**: {plan.get('topic', '-')}",
         f"- **判断依据**: {plan.get('reason', '-')}",
+    ]
+    if source:
+        lines.append(f"- **参考样本**: {source.get('platform') or '-'}「{source.get('title') or '-'}」")
+    if fresh_angle:
+        lines.append(f"- **新切入场景**: {fresh_angle.get('scene') or '-'}；核心问题：{fresh_angle.get('core_question') or '-'}")
+    inherited_logic = plan.get("inherited_logic") or []
+    if inherited_logic:
+        lines.append(f"- **继承的底层逻辑**: {'；'.join(inherited_logic)}")
+    avoid_repeating = plan.get("avoid_repeating") or []
+    if avoid_repeating:
+        lines.append(f"- **明确不重复**: {'；'.join(avoid_repeating)}")
+    lines.extend([
         "",
         "### 小红书图文",
-    ]
+    ])
     for title in xhs.get("titles", []):
         lines.append(f"- 标题备选: {title}")
     lines.extend([

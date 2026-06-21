@@ -358,48 +358,137 @@ def platform_summaries(items: list[dict], diagnostics: list[dict], daily_data: d
     return summaries
 
 
+FRESH_ANGLE_BANK = [
+    {
+        "scene": "门突然被风关上",
+        "topic": "外应取象的三步判断",
+        "core_question": "先看门、风，还是那一声响？",
+        "avoid_terms": ["门", "风", "关上"],
+    },
+    {
+        "scene": "手机突然亮屏",
+        "topic": "三要取象里的动静判断",
+        "core_question": "取手机，取消息，还是取你当下的念头？",
+        "avoid_terms": ["手机", "亮屏", "消息"],
+    },
+    {
+        "scene": "灯忽明忽暗",
+        "topic": "离卦取象和环境异常",
+        "core_question": "这是火象，还是普通环境问题？",
+        "avoid_terms": ["灯", "明暗", "火象"],
+    },
+    {
+        "scene": "纸被风吹动",
+        "topic": "巽卦取象和主次关系",
+        "core_question": "为什么不是只看纸，而要先看风？",
+        "avoid_terms": ["纸", "风", "吹动"],
+    },
+    {
+        "scene": "钥匙突然找不到",
+        "topic": "失物场景里的取象顺序",
+        "core_question": "先看物，先看方位，还是先看起因？",
+        "avoid_terms": ["钥匙", "找不到", "失物"],
+    },
+]
+
+
+def _contains_any(text: str, terms: list[str]) -> bool:
+    return any(term and term in text for term in terms)
+
+
+def choose_fresh_angle(best_title: str, content: str) -> dict:
+    source_text = f"{best_title} {content}"
+    for angle in FRESH_ANGLE_BANK:
+        if not _contains_any(source_text, angle["avoid_terms"]):
+            return angle
+    fallback = dict(FRESH_ANGLE_BANK[0])
+    fallback["note"] = "可用新场景库已全部命中过往内容关键词，使用默认新场景并要求人工复核。"
+    return fallback
+
+
+def extract_effective_logic(best: dict, diagnostics: list[dict]) -> list[str]:
+    best_tags = []
+    for diag in diagnostics:
+        if diag.get("title") == best.get("title") and diag.get("status") == "good":
+            best_tags.extend(diag.get("tags") or [])
+    logic = [
+        "用具体生活异常切入抽象概念，降低理解门槛。",
+        "标题采用二选一或冲突提问，让读者先产生判断欲。",
+        "正文做成步骤表、对照表或清单，承接收藏行为。",
+        "结尾设置案例征集或选择题，放大评论信号。",
+    ]
+    if "评论潜力强" in best_tags:
+        logic.append("保留开放式判断题，因为它能带来真实讨论。")
+    if "资料价值强" in best_tags:
+        logic.append("保留可保存的卡片结构，但更换案例和知识点。")
+    return logic
+
+
+def build_avoid_repeating(best_title: str, content: str) -> list[str]:
+    avoid = [f"不要复述上一条标题：{best_title}"]
+    text = f"{best_title} {content}"
+    if _contains_any(text, ["水杯", "杯", "水", "打翻"]):
+        avoid.append("不要继续讲水杯打翻、杯/水取象或同一生活场景。")
+    avoid.append("不要只把旧标题换成“新手收藏版”“生活例子讲清楚”等包装词。")
+    avoid.append("只继承高表现内容的底层机制，不继承题材本体。")
+    return avoid
+
+
 def build_next_content(items: list[dict], diagnostics: list[dict]) -> dict:
     best = max(items, key=score_item) if items else {}
     best_title = best.get("title") or "上一条高互动内容"
-    topic = infer_topic(best_title, best.get("content_summary", ""))
-    reason = "沿用当前最高综合得分内容的选题方向，并把其互动信号放大为更具体的案例。"
+    content = best.get("content_summary", "")
+    angle = choose_fresh_angle(best_title, content)
+    topic = f"{angle['scene']}：{angle['topic']}"
+    inherited_logic = extract_effective_logic(best, diagnostics)
+    avoid_repeating = build_avoid_repeating(best_title, content)
+    reason = "不是复述上一条内容，而是继承其底层机制：具体生活异常 + 二选一问题 + 步骤化收藏结构 + 评论引导。"
     weak = [d for d in diagnostics if d["status"] == "bad"]
     if weak:
         reason += f" 同时修正短板：{'; '.join(weak[0]['tags'][:2])}。"
 
     return {
+        "section": "下一期内容决策",
         "topic": topic,
+        "source_reference": {
+            "platform": best.get("platform"),
+            "title": best_title,
+            "metrics": best.get("metrics") or {},
+        },
+        "fresh_angle": angle,
+        "inherited_logic": inherited_logic,
+        "avoid_repeating": avoid_repeating,
         "reason": reason,
         "xhs": {
             "platform": "小红书",
             "titles": [
-                f"{topic}｜新手收藏版",
-                f"{topic}：一个生活例子讲清楚",
-                f"别再死记硬背，{topic}这样用",
-                f"{topic}对照表：看完就能套案例",
+                f"{angle['scene']}，古人会先看什么？",
+                f"{angle['topic']}｜一个生活场景讲清楚",
+                f"新手取象练习：{angle['core_question']}",
+                f"收藏版：{angle['scene']}的取象步骤表",
             ],
-            "outline": "6-7 页卡片：痛点/误区 -> 核心判断 -> 表格或口诀 -> 生活案例 -> 总结 -> 评论提问。",
-            "copy": f"刷到先收藏。很多人卡在「{topic}」，不是概念不会背，而是不知道怎么落到具体场景。今天用一个普通例子，把判断步骤讲清楚。",
+            "outline": f"6-7 页卡片：{angle['scene']} -> 新手常见误判 -> 主象/辅象怎么分 -> 三步判断表 -> 一个反例 -> 总结口诀 -> 评论征集下一种生活外应。",
+            "copy": f"这期不重复上一条案例，只沿用它好用的结构：从一个具体生活异常切入。比如「{angle['scene']}」，真正要练的不是背概念，而是判断：{angle['core_question']}",
         },
         "douyin": {
             "platform": "抖音",
-            "format": "图文或 30-45 秒短视频",
+            "format": "30-45 秒短视频或图文",
             "hooks": [
-                f"很多人学不会，不是因为难，是第一步「{topic}」就错了。",
-                f"遇到这个场景，你会怎么判断？古人的思路其实很简单。",
+                f"{angle['scene']}，你第一反应会取什么？{angle['core_question']}",
+                f"新手取象最容易错：看到{angle['scene'][:2]}就急着下结论，其实第一步不是这个。",
             ],
-            "script": "1-3 秒抛场景冲突；4-10 秒给核心判断句；11-30 秒讲一个具体例子；31-45 秒总结方法，并引导评论选择下一期案例。",
+            "script": f"1-3 秒抛出场景：{angle['scene']}；4-10 秒让观众二选一：{angle['core_question']}；11-30 秒讲主象、辅象、动因三步；31-45 秒给一句口诀，并让评论区提交下一个生活场景。",
         },
         "wechat": {
             "platform": "微信公众号",
-            "title": f"{topic}：从一个生活场景讲清楚",
-            "structure": "开头提出读者困惑；正文分 3 个小标题讲概念、案例、误区；结尾给清单和下一篇预告。",
-            "摘要": "适合沉淀为长文，把短视频/图文里表现好的问题扩展成系统解释。",
+            "title": f"{angle['scene']}：从一个外应场景讲清取象顺序",
+            "structure": "开头承接读者熟悉的生活异常；正文分“先别急着取象”“主次怎么分”“如何避免牵强附会”三个小标题；结尾给可收藏清单和下一篇案例预告。",
+            "摘要": "公众号不复写短内容，而是把同一底层逻辑沉淀成更系统的取象顺序和误区辨析。",
         },
         "ab_test": {
-            "variable": "标题表达",
-            "samples": ["概念解释型", "错误纠正型", "生活场景型"],
-            "winning_standard": "发布后 24 小时内，优先看播放/阅读是否高于历史中位数，其次看评论率和收藏/在看信号。",
+            "variable": "新场景切入方式",
+            "samples": ["生活异常型", "二选一提问型", "步骤清单型"],
+            "winning_standard": "发布后 24 小时内，优先看播放/阅读是否高于历史中位数，其次看评论率和收藏/在看信号；若旧场景词再次出现，判定为选题重复而不是有效复用。",
         },
     }
 

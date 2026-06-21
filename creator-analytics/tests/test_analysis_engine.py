@@ -233,6 +233,63 @@ class CreatorAnalyticsAnalysisTests(unittest.TestCase):
         self.assertIn("backend_not_confirmed", wechat_summary["summary"])
         self.assertNotIn("无新增发布", wechat_summary["summary"])
 
+    def test_next_content_inherits_logic_without_repeating_previous_scene(self):
+        daily = {
+            "xhs": {
+                "platform": "小红书",
+                "date": "2026-06-20",
+                "items": [
+                    {
+                        "publish_date": "2026-06-20 20:01",
+                        "title": "梅花易数｜水杯突然打翻，先看杯还是水？",
+                        "content": "用水杯突然打翻讲坎兑取象和主次判断。",
+                        "content_type": "图文/笔记",
+                        "views": 260,
+                        "likes": 6,
+                        "comments": 11,
+                        "collects": 12,
+                    }
+                ],
+            },
+            "douyin": {
+                "platform": "抖音",
+                "date": "2026-06-20",
+                "items": [
+                    {
+                        "publish_date": "2026-06-20 20:10",
+                        "title": "梅花易数｜水杯突然打翻，先看杯还是水？",
+                        "content": "同一个水杯案例的视频版。",
+                        "content_type": "图文",
+                        "views": 81,
+                        "likes": 3,
+                        "comments": 0,
+                    }
+                ],
+            },
+        }
+
+        analysis = analyze_daily_data(daily, history=[], benchmark_config={})
+        plan = analysis["next_content"]
+        plan_text = json.dumps(plan, ensure_ascii=False)
+        suggested_text = json.dumps(
+            {
+                "topic": plan["topic"],
+                "xhs": plan["xhs"],
+                "douyin": plan["douyin"],
+                "wechat": plan["wechat"],
+            },
+            ensure_ascii=False,
+        )
+
+        self.assertIn("inherited_logic", plan)
+        self.assertIn("avoid_repeating", plan)
+        self.assertIn("fresh_angle", plan)
+        self.assertIn("水杯", " ".join(plan["avoid_repeating"]))
+        self.assertNotIn("水杯", suggested_text)
+        self.assertNotIn("打翻", suggested_text)
+        self.assertIn("不是复述上一条内容", plan["reason"])
+        self.assertIn("继承", plan_text)
+
 
 if __name__ == "__main__":
     unittest.main()

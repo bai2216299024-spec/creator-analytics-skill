@@ -2,6 +2,27 @@
 
 This file records user-facing improvements for every GitHub update. Keep it readable for creators and portable for other agents.
 
+## 2026-06-22
+
+### Optimized
+
+- Added an anti-repeat next-content rule: high-performing content is now treated as evidence, not as the next topic to rewrite.
+- Added `source_reference`, `inherited_logic`, `avoid_repeating`, and `fresh_angle` to the JSON next-content plan.
+- Updated Markdown reports to show what logic should be inherited and what previous material must not be repeated.
+- Added regression coverage so a strong "水杯打翻" item cannot generate another water-cup next-topic recommendation.
+
+### Why It Matters
+
+- Daily reviews should guide the next creation, not produce a polished repeat of yesterday's idea.
+- Other agents can now reuse the report safely because the JSON explicitly separates performance mechanism from content material.
+
+### Verification
+
+- Unit tests passed.
+- Skill validation passed.
+- The 2026-06-20 report was regenerated and now recommends a fresh scene while preserving the successful content logic.
+- Privacy scan confirmed no real account names, cookies, profiles, history, reports, or logs are included in the public repo copy.
+
 ## 2026-06-21
 
 ### Optimized
