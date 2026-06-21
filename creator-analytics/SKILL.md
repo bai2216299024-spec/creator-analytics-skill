@@ -26,22 +26,14 @@ python scripts/one_click_review.py --platform all
 python scripts/one_click_review.py --headed
 python scripts/one_click_review.py --comments-limit 50
 python scripts/one_click_review.py --skip-comments
-python scripts/one_click_review.py --data-dir /path/to/creator-analytics-data
+python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 ```
-
-*(On Windows, use backslashes: `--data-dir D:\creator-analytics-data`)*
 
 By default, if a collector detects expired login state during a normal non-headed run, the scheduler retries that platform once with a visible browser so the user can scan/login. Use `--no-auto-login` on `scripts/run_all.py` only when running in an environment where a browser must never open.
 
-For scheduled daily execution (cross-platform):
-
-```bash
-# Linux / macOS (cron)
-0 0 * * * cd /path/to/creator-analytics && python scripts/one_click_review.py
-```
+For scheduled daily execution on Windows:
 
 ```powershell
-# Windows (Task Scheduler)
 powershell -ExecutionPolicy Bypass -File scripts\run_daily_review.ps1
 ```
 
@@ -199,10 +191,6 @@ When another agent or machine needs this skill:
 4. Use `--data-dir` to keep login state and reports outside the copied skill:
 
 ```bash
-# Linux / macOS
-python scripts/one_click_review.py --data-dir /path/to/creator-analytics-data
-
-# Windows
 python scripts/one_click_review.py --data-dir D:\creator-analytics-data
 ```
 
