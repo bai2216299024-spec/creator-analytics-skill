@@ -134,11 +134,25 @@ wechat_api.json is private and must not be committed. It needs the Official Acco
 
 Behavior:
 
-1. scrape_wechat.py tries official API collection first.
-2. If API credentials are absent, it marks api_status=api_not_configured and falls back to the browser collector.
-3. If the browser collector hits login_required, the report must show collection failure instead of no-new-publish.
-4. API collection can retrieve published article records and official read/share/favorite statistics. Likes, comments, or 在看 may be unavailable on some account/API permission combinations; keep those fields as null.
-5. Browser collection remains a fallback for cases where API credentials are not configured, but it is not considered production-stable for unattended daily runs.
+scrape_wechat.py follows this fallback chain:
+
+| 触发条件 | 一线修复 | 仍失败兜底 |
+|----------|----------|-----------|
+| API credentials exist | 用 API 采集 published articles + read/share/favorite 数据 | API 获取不到 likes/comments/在看 → 保持 `null`，不填 0 |
+| API credentials absent (`api_not_configured`) | 回退到 browser collector | browser 也失败 → 标记 `collection_failed`，报告中声明「公众号采集失败」|  
+| browser collector 遇到登录页 (`login_required`) | 标记 collection_failed；**绝不**当作「该日未发布」| 若 auto-login 启用 → 用 `--headed` 重试一次 |
+| browser collector 返回空列表 | 检查 `empty_reason`：`no_matching_date` 或 `empty_list_visible` → 可确认无新发布 | `list_unreadable` / `backend_not_confirmed` / `target_date_visible_but_parse_failed` → **不可**确认无发布，标 uncertain |
+| Personal unverified account (API disabled) | 设置 `api_supported: false` + `api_disabled_reason: personal_unverified_official_account` | 使用 manual import：`data/manual/wechat_YYYY-MM-DD.json` |
+| 手动登录后仍显示登录页 | 设置 `login_status=manual_login_not_accepted`, `collection_status=login_required` | 失败，不保存为成功空结果 |
+| Playwright 无法启动 persistent profile（被其他窗口占用） | 保存 `empty_reason=browser_profile_locked` + 结构化失败结果 | 提示用户关闭已有微信采集浏览器后重试 |
+| 页面显示「请重新登录」死胡同 | 导航到显式微信登录入口再等扫码 | 扫码入口打不开 → 快速失败 `collection_status=login_required` |
+| 登录成功但页面未到达 backend | 等待 `首页` / `发表记录` / `内容管理` 等 backend 文本或 `cgi-bin/appmsgpublish` URL | 未到达 backend → `login_status=manual_login_not_accepted`，失败 |
+
+🔴 CHECKPOINT: After each WeChat collection, verify that collection_status is recorded. If status is anything other than `ok` or confirmed-empty, the platform summary must state the actual failure reason — never silently skip.
+
+API collection can retrieve published article records and official read/share/favorite statistics. Likes, comments, or 在看 may be unavailable on some account/API permission combinations; keep those fields as null.
+
+Browser collection remains a fallback for cases where API credentials are not configured, but it is not considered production-stable for unattended daily runs.
 
 Personal unverified Official Accounts may not have the publish/statistics/comment APIs. In that case, set private config/wechat_api.json with:
 
@@ -150,6 +164,19 @@ Then use manual import instead of failing the daily report. Put the file at:
 data/manual/wechat_YYYY-MM-DD.json
 
 Use references/wechat_manual_import.example.json as the template. When this file exists, scrape_wechat.py uses collection_method=manual_import and includes those articles in the daily report.
+
+## 🛟 失败模式与 Fallback 树（全局）
+
+以下表格覆盖所有平台的通用失败场景：
+
+| 触发条件 | 一线修复 | 仍失败兜底 |
+|----------|----------|-----------|
+| 采集器检测到登录态过期 | 用 `--headed` 重试一次（`run_all.py` auto-login 机制） | 重试后仍失败 → 标记 `login_required`，报告中声明「该平台采集因登录过期失败」|  
+| 平台页面改版导致选择器失效 | 使用内置备选选择器组；提取可见文本做文本级匹配 | 仍无数据 → 标记 `collection_failed` + `reason=selector_outdated`，不影响其他平台 |
+| 平台返回空列表（可能无发布） | 检查 `empty_reason`：`no_matching_date` 可确认无发布 | 无法确认 → 标记 `list_unreadable`，报告标 uncertain |
+| 单个平台采集失败 | 继续处理其他平台，不中断整个 workflow | 报告中标明失败平台及原因，其余平台正常出报告 |
+| 三平台同步无数据 | 检查全局网络/登录态；确认日期参数是否正确 | 标记 `multi_platform_failure`，建议用户手动检查 |
+| 网络超时或页面加载失败 | 重试 1 次 | 仍失败 → 标记 `network_error`，不重试 |
 
 ## Benchmark Accounts
 
@@ -163,7 +190,15 @@ If no benchmark config exists, the report must say `未配置对标账号` and c
 
 ## Comment Collection
 
-By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is production-safe and conservative: do not turn ordinary page text, buttons, menus, titles, metrics, or body copy into comments. If a platform detail page is unavailable or the page structure changes, keep the base metrics and mark comment_collection_status instead of failing the whole report.
+By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is production-safe and conservative: do not turn ordinary page text, buttons, menus, titles, metrics, or body copy into comments.
+
+| 触发条件 | 一线修复 | 仍失败兜底 |
+|----------|----------|-----------|
+| 平台详情页可访问 | 提取 comments 列表，最多 50 条 | 若页面结构变化找不到评论容器 → 标记 `no_comment_container`，保留基础指标 |
+| 平台无详情页 URL | 跳过评论采集，标记 `no_detail_url` | — |
+| 评论容器存在但内容为空 | 标记 `empty`，报告中说明「暂无评论」| 区分「有列表但无评论」vs「采集不全」|
+| `is_self` 判断需要账号名匹配 | 读取 `config/self_accounts.json`；匹配到的标记 `is_self=true` | 无配置文件 → 所有评论保持 `is_self=null`，不驱动选题建议 |
+| 提取的评论置信度低 | 标记 `confidence=low`，仅用于摘要不用于驱动选题 | 仅 `is_self=false` + `confidence=high/medium` 可用于 next-topic evidence |
 
 Valid comment_collection_status values: ok, empty, skipped, no_detail_url, no_comment_container, login_required, failed.
 
