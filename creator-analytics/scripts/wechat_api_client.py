@@ -34,6 +34,9 @@ def load_api_config(config_path: Path) -> dict[str, Any] | None:
     if not config_path.exists():
         return None
     data = json.loads(config_path.read_text(encoding="utf-8"))
+    if data.get("api_supported") is False:
+        reason = data.get("api_disabled_reason") or "api_unsupported"
+        raise WeChatApiError(f"api_unsupported:{reason}")
     appid = (data.get("appid") or "").strip()
     appsecret = (data.get("appsecret") or "").strip()
     if not appid or not appsecret:

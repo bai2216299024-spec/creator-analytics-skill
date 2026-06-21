@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 from comments_utils import enrich_items_with_comments, load_self_accounts
-from paths import config_dir, cookie_file, output_dir, profile_dir
+from paths import config_dir, cookie_file, data_dir, output_dir, profile_dir
 from wechat_api_client import WeChatApiError, collect_wechat_api
 
 PLATFORM = "微信公众号"
@@ -27,6 +27,7 @@ DEFAULT_PROFILE_DIR = profile_dir("wechat")
 DEFAULT_SELF_ACCOUNTS_FILE = config_dir() / "self_accounts.json"
 DEFAULT_API_CONFIG_FILE = config_dir() / "wechat_api.json"
 DEFAULT_API_TOKEN_CACHE_FILE = cookie_file("wechat_api_token")
+DEFAULT_MANUAL_IMPORT_DIR = data_dir() / "manual"
 
 
 def parse_args():
@@ -85,6 +86,11 @@ def scrape_wechat(
         "login_status": "unknown",
         "collection_method": "web",
     }
+    manual_result = load_manual_import(target_date_str)
+    if manual_result:
+        result.update(manual_result)
+        return result
+
     api_result = try_collect_wechat_api(target_date_str, comments_limit, skip_comments)
     if api_result.get("available") and not api_result.get("error"):
         result["collection_method"] = "api"
@@ -97,6 +103,14 @@ def scrape_wechat(
             result["api_metric_errors"] = api_result["api_metric_errors"]
         return result
     result["api_status"] = api_result.get("error") or "api_not_configured"
+    if api_result.get("unsupported"):
+        result["collection_method"] = "manual_import"
+        result["collection_status"] = "skipped"
+        result["empty_reason"] = "api_unsupported"
+        result["login_status"] = "not_applicable"
+        result["error"] = None
+        result["manual_import_expected"] = str(DEFAULT_MANUAL_IMPORT_DIR / f"wechat_{target_date_str}.json")
+        return result
     if api_result.get("available") and api_result.get("error"):
         result["collection_method"] = "api"
         result["collection_status"] = "failed"
@@ -176,6 +190,28 @@ def scrape_wechat(
     return result
 
 
+def load_manual_import(target_date_str: str) -> dict | None:
+    manual_file = DEFAULT_MANUAL_IMPORT_DIR / f"wechat_{target_date_str}.json"
+    if not manual_file.exists():
+        return None
+    with manual_file.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        items = data
+    else:
+        items = data.get("items") or []
+    return {
+        "collection_method": "manual_import",
+        "collection_status": "ok" if items else "empty",
+        "empty": not bool(items),
+        "empty_reason": None if items else "manual_import_empty",
+        "login_status": "not_applicable",
+        "items": items,
+        "manual_import_file": str(manual_file),
+        "error": None,
+    }
+
+
 def try_collect_wechat_api(target_date_str: str, comments_limit: int, skip_comments: bool) -> dict:
     try:
         api_result = collect_wechat_api(
@@ -186,7 +222,10 @@ def try_collect_wechat_api(target_date_str: str, comments_limit: int, skip_comme
             skip_comments,
         )
     except WeChatApiError as exc:
-        return {"available": True, "error": str(exc), "items": []}
+        error = str(exc)
+        if error.startswith("api_unsupported:"):
+            return {"available": True, "unsupported": True, "error": error, "items": []}
+        return {"available": True, "error": error, "items": []}
     if not api_result.get("available"):
         return {"available": False, "error": api_result.get("error") or "api_not_configured", "items": []}
     print("✅ 微信公众号使用官方 API 完成采集")

@@ -24,6 +24,16 @@ class WeChatApiClientTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["error"], "api_not_configured")
 
+    def test_api_unsupported_config_raises_clear_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "wechat_api.json"
+            config_path.write_text(
+                '{"appid":"YOUR_TEST_APPID","appsecret":"YOUR_WECHAT_OFFICIAL_ACCOUNT_APPSECRET","api_supported":false,"api_disabled_reason":"personal_unverified_official_account"}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(Exception, "api_unsupported:personal_unverified_official_account"):
+                collect_wechat_api(config_path, Path(tmp) / "token.json", "2026-06-20")
+
     def test_collects_published_articles_and_metrics_without_network(self):
         responses = []
 

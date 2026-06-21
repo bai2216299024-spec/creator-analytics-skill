@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,8 @@ from comments_utils import (
     summarize_comment_insights,
 )
 from generate_report import build_comments_section, build_platform_section
-from scrape_wechat import classify_empty_page, is_relogin_page, launch_wechat_context, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access, wait_until_logged_in
+import scrape_wechat
+from scrape_wechat import classify_empty_page, is_relogin_page, launch_wechat_context, load_manual_import, mark_browser_launch_failure, open_login_entry, profile_init_notice, verify_backend_access, wait_until_logged_in
 
 
 class FakePage:
@@ -223,6 +225,24 @@ class CommentsPipelineTests(unittest.TestCase):
 
         self.assertIn("需要 headed 登录一次", notice)
         self.assertIn("wechat_profile", notice)
+
+    def test_wechat_manual_import_loads_items(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_dir = scrape_wechat.DEFAULT_MANUAL_IMPORT_DIR
+            scrape_wechat.DEFAULT_MANUAL_IMPORT_DIR = Path(tmp)
+            try:
+                manual_file = Path(tmp) / "wechat_2026-06-20.json"
+                manual_file.write_text(
+                    '{"items":[{"publish_date":"2026-06-20 08:00","title":"手动导入文章","content_type":"文章","reads":10}]}',
+                    encoding="utf-8",
+                )
+                result = load_manual_import("2026-06-20")
+            finally:
+                scrape_wechat.DEFAULT_MANUAL_IMPORT_DIR = old_dir
+
+        self.assertEqual(result["collection_method"], "manual_import")
+        self.assertEqual(result["collection_status"], "ok")
+        self.assertEqual(result["items"][0]["title"], "手动导入文章")
 
     def test_wechat_empty_page_classifies_no_matching_date(self):
         page = FakePage("首页\n发表记录\n2026-06-19\n第一期文章\n阅读 100")

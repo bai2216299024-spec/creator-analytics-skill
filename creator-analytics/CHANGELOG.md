@@ -8,6 +8,8 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 - Added WeChat Official Account API-first collection using private config/wechat_api.json, with browser collection as fallback.
 - Changed configured WeChat API failures such as invalid IP whitelist into explicit API errors instead of masking them with browser login failures.
+- Added personal-unverified WeChat fallback: when official APIs are unsupported, the collector can skip API/browser scraping and read data/manual/wechat_YYYY-MM-DD.json instead.
+- Added references/wechat_manual_import.example.json for stable manual import into daily reports.
 - Added config/wechat_api.example.json and kept the real credential file ignored by Git.
 - Added API collection tests for missing config and successful article/metric/comment normalization.
 - Added an anti-repeat next-content rule: high-performing content is now treated as evidence, not as the next topic to rewrite.

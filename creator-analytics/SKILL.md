@@ -135,6 +135,17 @@ Behavior:
 4. API collection can retrieve published article records and official read/share/favorite statistics. Likes, comments, or 在看 may be unavailable on some account/API permission combinations; keep those fields as null.
 5. Browser collection remains a fallback for cases where API credentials are not configured, but it is not considered production-stable for unattended daily runs.
 
+Personal unverified Official Accounts may not have the publish/statistics/comment APIs. In that case, set private config/wechat_api.json with:
+
+api_supported: false
+api_disabled_reason: personal_unverified_official_account
+
+Then use manual import instead of failing the daily report. Put the file at:
+
+data/manual/wechat_YYYY-MM-DD.json
+
+Use references/wechat_manual_import.example.json as the template. When this file exists, scrape_wechat.py uses collection_method=manual_import and includes those articles in the daily report.
+
 ## Benchmark Accounts
 
 External benchmark accounts are optional in v1. Copy the example file before filling real accounts:
