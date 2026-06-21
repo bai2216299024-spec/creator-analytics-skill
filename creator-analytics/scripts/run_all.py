@@ -170,6 +170,8 @@ def main():
     print(f"{'=' * 70}")
 
     report_args = ["--date", report_date]
+    if args.dry_run:
+        report_args.append("--no-zone-sync")
     code = run_script("generate_report.py", *report_args)
     exit_codes["report"] = code
 

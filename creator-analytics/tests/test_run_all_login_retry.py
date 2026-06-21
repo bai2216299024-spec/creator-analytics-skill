@@ -83,6 +83,20 @@ class RunAllLoginRetryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(calls[0], ("scrape_wechat.py", ("--date", "2026-06-20")))
 
+    def test_dry_run_disables_zone_sync_for_report_generation(self):
+        calls = []
+
+        def fake_run_script(script_name, *args):
+            calls.append((script_name, args))
+            return 0
+
+        argv = ["run_all.py", "--dry-run", "--date", "2026-06-20", "--skip-comments"]
+        with patch.object(sys, "argv", argv), patch.object(run_all, "run_script", side_effect=fake_run_script):
+            code = run_all.main()
+
+        self.assertEqual(code, 0)
+        self.assertIn(("generate_report.py", ("--date", "2026-06-20", "--no-zone-sync")), calls)
+
 
 if __name__ == "__main__":
     unittest.main()

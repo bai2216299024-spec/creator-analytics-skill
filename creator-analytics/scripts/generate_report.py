@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--history-file", default=str(DEFAULT_HISTORY_FILE), help="历史库 JSONL 路径")
     parser.add_argument("--benchmark-config", default=str(DEFAULT_BENCHMARK_CONFIG), help="对标账号配置")
     parser.add_argument("--date", default=None, help="报告日期 YYYY-MM-DD，默认昨天")
+    parser.add_argument("--no-zone-sync", action="store_true", help="只生成报告，不同步到三区数据报表")
     return parser.parse_args()
 
 
@@ -353,6 +354,17 @@ HEADING_PLATFORM_MAP = {
 }
 
 
+def _safe_zone_target(zones_root: Path, zone: str, folder: str) -> Path | None:
+    """Resolve a zone target and ensure it cannot escape zones_root."""
+    try:
+        root = zones_root.resolve()
+        target = (root / zone / folder).resolve()
+        target.relative_to(root)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return target
+
+
 def sync_to_zones(report_date: str, report_text: str):
     """Split the multi-platform report and write per-platform files into zone folders.
 
@@ -373,6 +385,11 @@ def sync_to_zones(report_date: str, report_text: str):
     if not zones_root.is_dir():
         print(f"[WARN] 工作区路径不存在，跳过同步: {zones_root}")
         return
+    try:
+        zones_root = zones_root.resolve()
+    except OSError as exc:
+        print(f"[WARN] 工作区路径不可解析，跳过同步: {exc}")
+        return
 
     platforms = config.get("platforms", {})
     file_name = f"{report_date}-指标日报.md"
@@ -385,7 +402,12 @@ def sync_to_zones(report_date: str, report_text: str):
         section = _extract_section(report_text, heading)
         if section is None:
             continue
-        target_dir = zones_root / platform_cfg["zone"] / platform_cfg["folder"]
+        zone = str(platform_cfg.get("zone") or "")
+        folder = str(platform_cfg.get("folder") or "")
+        target_dir = _safe_zone_target(zones_root, zone, folder)
+        if target_dir is None:
+            print(f"  [WARN] 跳过不安全的专区路径: {platform_key}")
+            continue
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / file_name
         try:
@@ -445,10 +467,11 @@ def main():
     print(f"分析 JSON 已保存到 {analysis_file}")
 
     # Zone sync (optional — skipped silently if not configured)
-    try:
-        sync_to_zones(report_date, report)
-    except Exception as exc:
-        print(f"[WARN] 三专区同步出错（不影响报告生成）: {exc}")
+    if not args.no_zone_sync:
+        try:
+            sync_to_zones(report_date, report)
+        except Exception as exc:
+            print(f"[WARN] 三专区同步出错（不影响报告生成）: {exc}")
 
     print("\n" + "=" * 70)
     print(report)

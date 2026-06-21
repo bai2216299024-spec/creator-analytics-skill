@@ -40,7 +40,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_daily_review.ps1
 To install a Windows daily task:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -At 00:00
+powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -At 09:00
 ```
 
 ## Workflow
@@ -202,6 +202,16 @@ Do not copy a live user's browser profile to an untrusted machine. Prefer a fres
 
 When updating the public GitHub repository, always update CHANGELOG.md in the same commit.
 
+The changelog entry must explain:
+
+- what was optimized
+- why the optimization matters to the creator workflow
+- which files or workflow areas changed
+- what validation was run
+- whether privacy-sensitive runtime data was excluded
+
+Do not rely on the commit message alone. The changelog is the user-facing record of skill evolution and must be readable by another agent before it runs or modifies the skill.
+
 ## Zone Sync（可选）
 
 每日采集完成后，可将平台指标日报自动写入三专区的 `数据报表/` 文件夹。
@@ -218,19 +228,11 @@ python scripts/setup_zones.py
 python scripts/setup_zones.py --zones-root /path/to/workspace
 ```
 
-配置保存在 `config/zones_sync.json`（自动加入 `.gitignore`，不会提交到 git）。未配置时同步功能静默跳过，不影响核心采集。
+配置保存在 `config/zones_sync.json`（自动加入 `.gitignore`，不会提交到 git）。未配置时同步功能静默跳过，不影响核心采集。同步目标必须解析在 `zones_root` 内；如果配置中的 `zone` 或 `folder` 试图跳出工作区，报告生成器会跳过该平台同步。
 
 同步文件命名规则：`YYYY-MM-DD-指标日报.md`
 
-## GitHub Update Rule The changelog entry must explain:
-
-- what was optimized
-- why the optimization matters to the creator workflow
-- which files or workflow areas changed
-- what validation was run
-- whether privacy-sensitive runtime data was excluded
-
-Do not rely on the commit message alone. The changelog is the user-facing record of skill evolution and must be readable by another agent before it runs or modifies the skill.
+Dry-run is for validation only. `run_all.py --dry-run` still generates temporary output files under `data/output/`, but it must pass `--no-zone-sync` to `generate_report.py` so演练结果不会写入真实专区。
 
 ## Runtime State
 
