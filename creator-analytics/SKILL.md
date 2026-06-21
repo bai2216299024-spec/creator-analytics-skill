@@ -40,7 +40,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_daily_review.ps1
 To install a Windows daily task:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -At 09:00
+powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -At 00:00
 ```
 
 ## Workflow

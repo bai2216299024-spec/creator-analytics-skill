@@ -1,6 +1,6 @@
 param(
     [string]$TaskName = "CreatorAnalyticsDailyReview",
-    [string]$At = "09:00",
+    [string]$At = "00:00",
     [string]$PythonExe = "",
     [string]$DataDir = ""
 )

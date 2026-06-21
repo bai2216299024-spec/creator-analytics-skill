@@ -26,6 +26,17 @@ def config_dir() -> Path:
     return SKILL_DIR / "config"
 
 
+def workflow_root() -> Path | None:
+    """Return the surrounding Meihua workflow root when this skill is installed inside it."""
+    env_root = os.environ.get("MEIHUA_WORKFLOW_ROOT")
+    if env_root:
+        return Path(env_root).resolve()
+    for parent in [SKILL_DIR, *SKILL_DIR.parents]:
+        if (parent / "公众号专区").exists() and (parent / "小红书专区").exists() and (parent / "抖音专区").exists():
+            return parent.resolve()
+    return None
+
+
 def cookie_file(platform: str) -> Path:
     return data_dir() / "cookies" / f"{platform}_cookies.json"
 
