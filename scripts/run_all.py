@@ -126,6 +126,22 @@ def run_platform(platform: str, script_name: str, common_args: list[str], auto_l
             headed_args.append("--headed")
         return run_script(script_name, *headed_args)
 
+    # 检测微信页面关闭错误，自动重试一次
+    if platform == "wechat" and code != 0:
+        filename = PLATFORM_OUTPUT_FILES.get(platform)
+        if filename:
+            path = output_dir() / filename
+            if path.exists():
+                try:
+                    with path.open("r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    error = str(data.get("error") or "")
+                    if "Target page" in error or "browser has been closed" in error or "context" in error.lower():
+                        print(f"\n🔄 检测到微信公众号页面关闭错误（{error[:60]}...），自动重试一次...")
+                        return run_script(script_name, *run_args)
+                except (OSError, json.JSONDecodeError):
+                    pass
+
     return code
 
 
@@ -170,6 +186,8 @@ def main():
     print(f"{'=' * 70}")
 
     report_args = ["--date", report_date]
+    if args.dry_run:
+        report_args.append("--no-zone-sync")
     code = run_script("generate_report.py", *report_args)
     exit_codes["report"] = code
 

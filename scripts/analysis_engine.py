@@ -166,6 +166,34 @@ def score_item(item: dict | None) -> int:
     )
 
 
+# 已知已发布或已被建议过的内容关键词（用于跨报告期去重）
+KNOW_PUB_TOPICS = [
+    "水杯打翻", "水杯", "杯打翻",
+    "门被关上", "门突然被关上",
+    "门突然被风关上", "被风关上",
+    "8个符号概括万物", "个符号概括", "符号概括",
+    "三要感应法", "三要感应",
+    "取象不是乱猜", "取象分类", "象分类",
+    "异常现象，古人", "异常现象",
+    "鸟低飞", "鸟从面前低飞",
+    "手机没信号",
+]
+
+
+def is_meihua_related(item: dict) -> bool:
+    """检测内容是否与梅花易数相关，用于优先选择相关话题做下一期选题"""
+    title = item.get("title") or ""
+    content = item.get("content_summary") or ""
+    text = f"{title} {content}"
+    keywords = ["梅花易数", "易数", "取象", "外应", "卦", "八卦", "三要", "体用", "象"]
+    return any(keyword in text for keyword in keywords)
+
+
+def _already_published(text: str) -> bool:
+    """检查文本是否与已知已发布/已建议内容重复"""
+    return any(topic and topic in text for topic in KNOW_PUB_TOPICS)
+
+
 def classify_item(item: dict, baseline: dict) -> str:
     views = metric(item, "views")
     likes = metric(item, "likes")
@@ -360,16 +388,10 @@ def platform_summaries(items: list[dict], diagnostics: list[dict], daily_data: d
 
 FRESH_ANGLE_BANK = [
     {
-        "scene": "门突然被风关上",
-        "topic": "外应取象的三步判断",
-        "core_question": "先看门、风，还是那一声响？",
-        "avoid_terms": ["门", "风", "关上"],
-    },
-    {
-        "scene": "手机突然亮屏",
-        "topic": "三要取象里的动静判断",
-        "core_question": "取手机，取消息，还是取你当下的念头？",
-        "avoid_terms": ["手机", "亮屏", "消息"],
+        "scene": "陌生人对你笑了一下",
+        "topic": "人际外应的取象边界",
+        "core_question": "先看眼神、嘴角，还是那个时机？",
+        "avoid_terms": ["笑", "微笑", "陌生人", "眼神"],
     },
     {
         "scene": "灯忽明忽暗",
@@ -389,6 +411,12 @@ FRESH_ANGLE_BANK = [
         "core_question": "先看物，先看方位，还是先看起因？",
         "avoid_terms": ["钥匙", "找不到", "失物"],
     },
+    {
+        "scene": "转弯时差点撞上人",
+        "topic": "动象里的主次判断",
+        "core_question": "先看方向、速度，还是对方的表情？",
+        "avoid_terms": ["转弯", "撞", "方向", "差点"],
+    },
 ]
 
 
@@ -399,10 +427,14 @@ def _contains_any(text: str, terms: list[str]) -> bool:
 def choose_fresh_angle(best_title: str, content: str) -> dict:
     source_text = f"{best_title} {content}"
     for angle in FRESH_ANGLE_BANK:
-        if not _contains_any(source_text, angle["avoid_terms"]):
-            return angle
+        if _contains_any(source_text, angle["avoid_terms"]):
+            continue
+        if _already_published(angle["scene"]):
+            continue
+        return angle
     fallback = dict(FRESH_ANGLE_BANK[0])
-    fallback["note"] = "可用新场景库已全部命中过往内容关键词，使用默认新场景并要求人工复核。"
+    fallback["note"] = "可用新场景库已全部命中过往内容关键词或已被发布，使用默认新场景并要求人工复核。"
+    fallback["avoid_repeating_note"] = "【请人工确认】该场景是否与历史内容重复，如重复请换下一个场景。"
     return fallback
 
 
@@ -429,13 +461,23 @@ def build_avoid_repeating(best_title: str, content: str) -> list[str]:
     text = f"{best_title} {content}"
     if _contains_any(text, ["水杯", "杯", "水", "打翻"]):
         avoid.append("不要继续讲水杯打翻、杯/水取象或同一生活场景。")
+    if _contains_any(text, ["门", "关上", "被风关上"]):
+        avoid.append("不要继续讲与「门被关上」相关的场景（该内容已在 6/22 发布）。")
+    if _contains_any(text, ["鸟", "低飞", "鸟低飞"]):
+        avoid.append("不要继续讲鸟低飞场景（该选题已在上一期报告建议中标记为需换场景）。")
     avoid.append("不要只把旧标题换成“新手收藏版”“生活例子讲清楚”等包装词。")
     avoid.append("只继承高表现内容的底层机制，不继承题材本体。")
+    avoid.append("检查 KNOW_PUB_TOPICS 列表，确保新选题与历史所有已发布内容不重复。")
     return avoid
 
 
 def build_next_content(items: list[dict], diagnostics: list[dict]) -> dict:
-    best = max(items, key=score_item) if items else {}
+    # 优先选择梅花易数相关内容，避免选到平台任务类内容
+    meihua_items = [item for item in items if is_meihua_related(item)]
+    if meihua_items:
+        best = max(meihua_items, key=score_item)
+    else:
+        best = max(items, key=score_item) if items else {}
     best_title = best.get("title") or "上一条高互动内容"
     content = best.get("content_summary", "")
     angle = choose_fresh_angle(best_title, content)

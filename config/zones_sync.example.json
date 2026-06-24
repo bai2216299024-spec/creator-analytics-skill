@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy this file to zones_sync.json and edit zones_root to your content workspace path. zones_sync.json is git-ignored — never commit your private paths.",
+  "enabled": true,
+  "zones_root": "~/content-workspace",
+  "platforms": {
+    "xhs": {
+      "zone": "小红书专区",
+      "folder": "数据报表"
+    },
+    "douyin": {
+      "zone": "抖音专区",
+      "folder": "数据报表"
+    },
+    "wechat": {
+      "zone": "公众号专区",
+      "folder": "数据报表"
+    }
+  }
+}

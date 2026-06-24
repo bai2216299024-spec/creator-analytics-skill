@@ -6,6 +6,9 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 ### Optimized
 
+- Hardened Zone Sync so configured zone/folder paths cannot escape the configured workspace root.
+- Added `--no-zone-sync` to report generation and made `run_all.py --dry-run` pass it automatically, preventing validation runs from writing demo reports into real content zones.
+- Updated the daily task documentation to use the requested 09:00 schedule and consolidated the GitHub update rule in SKILL.md.
 - Added WeChat Official Account API-first collection using private config/wechat_api.json, with browser collection as fallback.
 - Changed configured WeChat API failures such as invalid IP whitelist into explicit API errors instead of masking them with browser login failures.
 - Added personal-unverified WeChat fallback: when official APIs are unsupported, the collector can skip API/browser scraping and read data/manual/wechat_YYYY-MM-DD.json instead.
@@ -20,6 +23,8 @@ This file records user-facing improvements for every GitHub update. Keep it read
 ### Why It Matters
 
 - Daily reviews should guide the next creation, not produce a polished repeat of yesterday's idea.
+- Dry-runs should verify workflow behavior without polluting the creator's real three-zone workspace.
+- Zone Sync is a convenience write path, so it must be bounded to the intended workspace even when private config is edited incorrectly.
 - Other agents can now reuse the report safely because the JSON explicitly separates performance mechanism from content material.
 - WeChat browser backend collection is not stable enough for unattended production runs; official API credentials provide the reliable path.
 
@@ -27,6 +32,7 @@ This file records user-facing improvements for every GitHub update. Keep it read
 
 - Unit tests passed.
 - Skill validation passed.
+- Dry-run workflow passed and no longer triggers Zone Sync.
 - The 2026-06-20 report was regenerated and now recommends a fresh scene while preserving the successful content logic.
 - Privacy scan confirmed no real account names, cookies, profiles, history, reports, or logs are included in the public repo copy.
 

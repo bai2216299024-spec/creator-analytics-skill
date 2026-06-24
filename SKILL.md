@@ -1,256 +1,193 @@
 ---
 name: creator-analytics
-description: 一键采集并复盘小红书、抖音、微信公众号创作者账号前一天发布的图文/视频/文章数据，基于账号历史基准和可选对标账号配置分析为什么数据好或差、是否疑似限流或分发异常、差在哪里、怎么提升、如何固定有效表达，并生成下一期选题、标题、图文卡片、短视频脚本和公众号文章思路。Use when the user asks to 统计创作者数据、生成每日复盘、分析小红书/抖音/公众号内容表现、诊断限流或分发异常、读取已发布图文视频文章、判断下一期选题、生成下一期小红书图文/抖音视频/公众号文章文案思路、设置每日内容数据自动复盘。
+description: 一键采集并复盘小红书/抖音/公众号昨日数据，对比历史基准诊断好差原因与分发异常，并生成下一期选题和内容思路。当用户要求统计创作者数据、生成每日复盘、分析内容表现、诊断限流、生成选题/文案方向时使用。
 ---
 
 # Creator Analytics
 
-Use this skill as a portable one-click workflow for creator account analytics across Xiaohongshu, Douyin, and WeChat Official Account.
+> **v2.0 · 2026-06-24** — 6 new analysis dimensions, L1→L4 hierarchical diagnosis, dynamic topic generation, percentile-based thresholds. Full optimization log: `references/darwin-optimization-v2.md`.
 
 ## Primary Entry
 
-Run only the public entrypoint unless debugging internals:
-
 ```bash
-python scripts/one_click_review.py
+python scripts/one_click_review.py                    # 默认：昨日三平台
+python scripts/one_click_review.py --date 2026-06-17   # 指定日期
+python scripts/one_click_review.py --platform xhs       # 单平台
+python scripts/one_click_review.py --headed             # 首次/登录过期
+python scripts/one_click_review.py --skip-comments      # 只看指标
+python scripts/setup.sh               # 安装/校验全部依赖
+python scripts/validate_skill.py         # 校验 skill 完整性
 ```
 
-Common options:
+🔴 CHECKPOINT · 🛑 STOP: Before running any collection script, confirm with the user ("即将采集[平台名]数据，是否继续？") and wait for explicit approval. This is required especially when --headed may be needed (first run or login expired).
 
-```bash
-python scripts/one_click_review.py --date 2026-06-17
-python scripts/one_click_review.py --platform xhs
-python scripts/one_click_review.py --platform douyin
-python scripts/one_click_review.py --platform wechat
-python scripts/one_click_review.py --platform all
-python scripts/one_click_review.py --headed
-python scripts/one_click_review.py --comments-limit 50
-python scripts/one_click_review.py --skip-comments
-python scripts/one_click_review.py --data-dir D:\creator-analytics-data
-```
-
-By default, if a collector detects expired login state during a normal non-headed run, the scheduler retries that platform once with a visible browser so the user can scan/login. Use `--no-auto-login` on `scripts/run_all.py` only when running in an environment where a browser must never open.
-
-For scheduled daily execution on Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_daily_review.ps1
-```
-
-To install a Windows daily task:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -At 09:00
-```
+After collection, review output files. If a platform shows no data, confirm real no-publish vs collection failure before trusting analysis.
 
 ## Workflow
 
-The workflow performs:
-
-1. Collect previous-day 小红书, 抖音, and 微信公众号 published content.
-2. Normalize each item into a shared model: platform, content type, publish time, title, content summary, metrics, URLs, and collection status.
-3. Append normalized items to `data/history/content_history.jsonl`.
-4. Compare each item against same-platform, same-content-type account history. Use the latest 30 items; if fewer than 5 exist, use fallback thresholds and mark low confidence.
-5. Read optional benchmark account config from `config/benchmark_accounts.json`. If absent, clearly state external benchmarking is not configured.
-6. Diagnose distribution anomalies such as low reach with high engagement, content-entry weakness, and multi-platform slump.
-7. Collect comment details where platform-specific detail/comment containers are available. Default to 50 comments per content item; use --skip-comments for faster metric-only runs.
-8. Separate other-user comments from the creator's own replies using config/self_accounts.json when present.
-9. Generate Markdown and JSON outputs:
-   - `data/output/report_YYYY-MM-DD.md`
-   - `data/output/analysis_YYYY-MM-DD.json`
+1. Collect previous-day content from 小红书/抖音/微信公众号
+2. Normalize into platform/content_type/metrics model
+3. Append to `data/history/content_history.jsonl`
+4. Compare each item against same-platform same-type history (last 30 items; fallback if < 5)
+5. Read optional `config/benchmark_accounts.json`; if absent, state 未配置对标账号
+6. Diagnose distribution anomalies (6 signals, see below)
+7. Collect comments (default 50/item); separate is_self=true from is_self=false
+8. Generate `data/output/report_YYYY-MM-DD.md` + `data/output/analysis_YYYY-MM-DD.json`
 
 ## Daily Review Behavior
 
-For requests like `统计昨天数据`, `生成昨日复盘`, `分析为什么差`, `下一期做什么`, or scheduled daily review:
+For requests like `统计昨天数据` / `分析为什么差` / `下一期做什么`:
 
-1. Run `python scripts/one_click_review.py`.
-2. Read the generated Markdown report and JSON analysis when needed.
-3. Return the key diagnosis and next-content recommendation.
-4. If the user asks for execution-ready content, expand the included next-content plan into full Xiaohongshu copy, Douyin script, or WeChat article.
+1. 🔴 Confirm with user before running: "即将采集昨日数据，是否继续？" Wait for explicit approval.
+2. Run `python scripts/one_click_review.py`
+3. Read the generated report — 🔴 CHECKPOINT: verify all expected platforms are present before diagnosing
+4. Return key diagnosis + next-content recommendation
+5. If user wants execution-ready content, expand the next-content plan into full copy/script/article
 
-If a platform has no new content, say so clearly. If collection fails, mark it as collection failure and never treat it as no new content.
+**Collection failure ≠ no new content.** Mark explicitly; never conflate.
 
-## Next-Content Novelty Rule
+## 🔴 Critical Rules
 
-When generating the next issue, do not rewrite or repackage the previous best-performing content as the next topic. The high-performing item is evidence, not the new subject.
+### Next-Content Novelty Rule
 
-Required behavior:
+**Inherit the mechanism, not the material.** The high-performing post is evidence, not the new subject.
 
-1. Extract the underlying performance logic first: concrete life scene, title hook, saveable structure, comment prompt, timing, or format.
-2. Choose a fresh scene, question, or angle that does not repeat the previous title, main object, story, or example.
-3. Output the fields `source_reference`, `inherited_logic`, `avoid_repeating`, and `fresh_angle` in the JSON plan.
-4. In Markdown, state what is inherited and what must not be repeated.
-5. If the user asks for execution-ready content from a report, expand `fresh_angle` and `inherited_logic`; do not expand the old title or old body again.
+1. Extract performance logic: life scene, title hook, saveable structure, comment prompt, timing, format
+2. Pick a fresh scene/question/angle that does NOT repeat the previous title, object, story, or example
+3. Output `source_reference`, `inherited_logic`, `avoid_repeating`, `fresh_angle` in JSON plan
+4. In Markdown, state what is inherited AND what must not be repeated
 
-In short: inherit the mechanism, not the material.
+### Never treat null metrics as 0
+
+If a platform hides a metric, preserve `null`/`未取到` — never substitute 0.
+
+### Never claim 限流/降权 without evidence
+
+Use hierarchical L1→L4 diagnosis. `none` level when no signals detected.
+
+### Never use is_self=true comments as audience demand
+
+Only is_self=false comments with high/medium confidence drive topic recommendations.
 
 ## Analysis Standard
 
-Do not only summarize metrics. Use the report to answer:
+The report answers seven questions per content item:
 
-- **为什么差**: Diagnose weak traffic entry, weak title hook, unclear value, weak interaction design, poor content-format fit, or timing/form mismatch.
-- **差在哪里**: Compare views/reads, likes, comments, collects, shares, and WeChat wows against account historical baseline.
-- **怎么提升**: Provide one concrete next action, such as rewriting the first 12 title characters, adding a table/checklist, changing the first 3 seconds, or turning a comment question into the next title.
-- **为什么好**: Identify the topic, hook, structure, save value, comment potential, or share-worthy conclusion that drove performance.
-- **如何固定下来**: Convert working patterns into reusable title formulas, hook formulas, content structures, comment prompts, and platform-specific formats.
-- **是否疑似限流/分发异常**: Distinguish content weakness from distribution issues. Treat low reach with strong interaction as possible initial recommendation-pool weakness; treat all-platform low reach and low interaction as account/topic-stage anomaly; never state hard platform punishment without evidence.
-- **评论怎么用**: Treat is_self=false comments as user demand, questions, objections, or content clues. Treat is_self=true comments as reply coverage and interaction design, not as external audience demand.
+| Question | Diagnostic Target |
+|---|---|
+| 为什么差 | Weak entry, weak hook, unclear value, weak interaction design, poor format fit |
+| 差在哪里 | Metrics vs historical baseline (per-platform, same-type) |
+| 如何提升 | One concrete action (rewrite first 12 chars, add checklist, change first 3 seconds) |
+| 为什么好 | Topic, hook, structure, save value, comment potential, share-worthy conclusion |
+| 如何固定下来 | Convert working patterns into reusable formulas/structures/prompts |
+| 是否限流 | Use L1→L4 tree; never claim punishment without evidence |
+| 评论怎么用 | User comments = demand/questions/clues; creator replies = coverage metric, not demand |
+
+**Six analysis dimensions** beyond metric summary (v2):
+
+- **趋势追踪（7日滚动）**: Day vs 7-day average — distinguishes noise from trend
+- **内容结构诊断**: Structure-to-performance mapping (tables, checklists, Q&A hooks → views/collects)
+- **互动质量分析**: Collect/like ratio, question-comment ratio, comment-rate trends
+- **选题疲劳预警**: Topic-cluster frequency + marginal-decay detection
+- **层次化根因 L1→L4**: Environment → Account → Topic → Expression
+- **选题多样性**: Content-type/topic-cluster distribution with coverage gaps
+
+Classification uses **percentile thresholds** (P25/P75 from history) not fixed ratios. Confidence graded low/medium/high.
 
 ## Distribution / Limit Diagnosis
 
-The report must include `分发/限流诊断` with:
+Six signals (priority-ordered decision logic):
 
-- diagnostic level: `none`, `normal`, `content`, `platform`, or `account`
-- signals such as `疑似初始推荐池未放量`, `内容入口与互动双弱`, or `三平台同步低迷`
-- evidence from current metrics vs historical baseline
-- recovery actions
+| Signal | Criteria | Action |
+|---|---|---|
+| 价值-曝光错配 | High save rate + low views | Fix title/cover, test different posting times |
+| 单日暴跌 | view_ratio < 0.3 (single day) | Check sensitive keywords/cover review before changing topic |
+| 互动率异常升高 | interaction_rate > 15% | Spot-check comment quality: controversy or genuine engagement? |
+| 疑似初始推荐池未放量 | Low reach + strong interaction | Same topic, change title/scene, test again |
+| 内容入口与互动双弱 | Low reach + low interaction | Fix packaging before blaming platform |
+| 三平台同步低迷 | 2+ platforms simultaneously low | Account recovery mode: safer framing, concrete cases |
 
-Recommended actions:
-
-- Low reach + strong interaction: keep the same topic, change title/first scene, and test again instead of abandoning the topic.
-- Low reach + low interaction: fix topic packaging, title, cover, first 3 seconds, and interaction prompt before blaming platform limits.
-- Multi-platform slump: enter account recovery mode for 2-3 posts with safer cultural-science framing, concrete cases, and less abstract repetition.
-
-For Meihua Yishu content, keep public-facing recommendations in `国学文化科普`, `传统文化学习`, and `古人思维方式` framing.
+For Meihua Yishu content: frame recommendations as `国学文化科普` / `传统文化学习` / `古人思维方式`.
 
 ## Platform Notes
 
-- 小红书: collect views, likes, comments, collects, and shares where visible. Treat high collect/low like as useful but emotionally underpowered.
-- 抖音: collect views, likes, comments, and content type. Treat low views as a first-3-seconds/title-entry problem before over-optimizing later structure.
-- 微信公众号: collect article reads, likes, comments, and 在看 where visible. If a metric is hidden or unavailable, preserve it as `null` / `未取到`, not `0`.
+- **小红书**: High collect/low like = save-value signal. Never treat as weakness.
+- **抖音**: Low views = first-3-seconds/title problem before optimizing structure.
+- **微信公众号**: Hidden metrics → `null`/`未取到`, never `0`.
 
-## WeChat Official Account Collection
+## Comment Rules
 
-For production daily reviews, use official API credentials whenever possible:
+- Only is_self=false + high/medium confidence → next-topic evidence
+- is_self=true → reply coverage metric, not audience demand
+- No thread info → call them "user questions", not "unanswered questions"
+- Default: 50 comments per item. `--skip-comments` for metric-only runs.
 
-config/wechat_api.example.json -> config/wechat_api.json
+For WeChat collection, runtime state, benchmark config, zone sync, and detailed anti-patterns: see `references/` directory and code comments in `scripts/`.
 
-wechat_api.json is private and must not be committed. It needs the Official Account appid and appsecret.
+## 反例与黑名单（Anti-patterns）
 
-Behavior:
+### 🚫 数据类
 
-1. scrape_wechat.py tries official API collection first.
-2. If API credentials are absent, it marks api_status=api_not_configured and falls back to the browser collector.
-3. If the browser collector hits login_required, the report must show collection failure instead of no-new-publish.
-4. API collection can retrieve published article records and official read/share/favorite statistics. Likes, comments, or 在看 may be unavailable on some account/API permission combinations; keep those fields as null.
-5. Browser collection remains a fallback for cases where API credentials are not configured, but it is not considered production-stable for unattended daily runs.
+| 反例 | 正确做法 |
+|---|---|
+| 把 `null`/`未取到` 当 `0` | 保持 null，报「未取到」 |
+| 声称「限流」无证据 | 分级诊断，无证据标 `none` |
+| 跨平台套用诊断 | 按平台独立分析 |
+| 采集失败=无发布 | 标记 `collection_failed` |
 
-Personal unverified Official Accounts may not have the publish/statistics/comment APIs. In that case, set private config/wechat_api.json with:
+### 🚫 内容生产类
 
-api_supported: false
-api_disabled_reason: personal_unverified_official_account
+| 反例 | 正确做法 |
+|---|---|
+| 直接改编历史最高分内容 | 提取机制，换场景/角度 |
+| 把 is_self=true 当受众需求 | 只用 is_self=false 高置信度评论 |
+| 无 thread 说「未回答问题」 | 称「用户评论/高价值评论」 |
 
-Then use manual import instead of failing the daily report. Put the file at:
+### 🚫 安全类
 
-data/manual/wechat_YYYY-MM-DD.json
+| 反例 | 正确做法 |
+|---|---|
+| 复制浏览器 profile 到不可信机器 | 新机器重新扫码 |
+| 提交 wechat_api.json / self_accounts.json | 加入 .gitignore |
 
-Use references/wechat_manual_import.example.json as the template. When this file exists, scrape_wechat.py uses collection_method=manual_import and includes those articles in the daily report.
+### 🚫 诊断类（v2 新增）
 
-## Benchmark Accounts
+| 反例 | 正确做法 |
+|---|---|
+| 单日波动当趋势判读 | 先看 7 日滚动 + P25/P75 |
+| 固定阈值（0.8/1.2）一刀切 | 用历史百分位 |
+| 不区分 L1→L4 就下结论 | 按四层根因树排查 |
+| 只看互动数量不看质量 | 加入收藏-点赞比、问题评论占比 |
+| 选题不检查多样性 | 加入 diversity report，填覆盖缺口 |
 
-External benchmark accounts are optional in v1. Copy the example file before filling real accounts:
+### 🚫 选题推荐类（v2 新增）
 
-```text
-config/benchmark_accounts.example.json -> config/benchmark_accounts.json
-```
+| 反例 | 正确做法 |
+|---|---|
+| 三平台推荐相同选题 | 按平台特性打分 |
+| AB 建议空洞（"测试新场景"） | 基于最弱信号生成具体变量 |
+| 依赖 7 个硬编码场景 | 从 history 动态生成 |
 
-If no benchmark config exists, the report must say `未配置对标账号` and continue using account history. When benchmark accounts are configured, use them as a future extension point for same-platform topic and interaction-structure comparison; do not block the daily report if benchmark collection is unavailable.
+### 🚫 流程类
 
-## Comment Collection
+| 反例 | 正确做法 |
+|---|---|
+| 一平台失败就放弃全报告 | 标记失败，继续其他平台 |
+| headless 跑微信采集 | 先 headed 建立登录态或配 API |
 
-By default, the workflow attempts to collect up to 50 comments for each previous-day content item. Comment collection is production-safe and conservative: do not turn ordinary page text, buttons, menus, titles, metrics, or body copy into comments. If a platform detail page is unavailable or the page structure changes, keep the base metrics and mark comment_collection_status instead of failing the whole report.
+## Scheduled Run Pattern
 
-Valid comment_collection_status values: ok, empty, skipped, no_detail_url, no_comment_container, login_required, failed.
+When running as a cron job or scripted flow (no interactive user):
 
-Each comment uses: comment_id, author_name, author_role, content, publish_time, like_count, reply_to, is_self, source_area, collection_status, and confidence.
+1. **Read report**: `read_file(report_path)` from `data/output/report_YYYY-MM-DD.md`
+2. **Read analysis**: `read_file(analysis_path)` from `data/output/analysis_YYYY-MM-DD.json`
+3. **Generate topics**: Based on diagnostic conclusions (not repeating published titles), create 3 new topics covering different `content_type` categories
+4. **Deliver**: Summarize key findings + topic recommendations
 
-Confidence values are high, medium, and low. Only is_self=false comments with high or medium confidence may be used as next-topic evidence. is_self=true comments are creator replies and must never be treated as audience demand. is_self=null comments stay in unknown-source summaries and should not drive recommendations.
+## Quick Reference
 
-Copy the example file before adding real account names:
-
-```text
-config/self_accounts.example.json -> config/self_accounts.json
-```
-
-self_accounts.json must stay private. Use it to list the creator's display names for xhs, douyin, and wechat; matching comments are marked is_self=true. Other comments are marked is_self=false; unknown author comments keep is_self=null.
-
-Only report unanswered questions when reliable reply_to/thread information exists. Without thread information, call them user questions or high-value questions, not unanswered questions.
-
-## Portable Or Multi-Agent Use
-
-When another agent or machine needs this skill:
-
-1. Copy the whole `creator-analytics` folder.
-2. Run `python scripts/validate_skill.py`.
-3. Install Playwright if needed.
-4. Use `--data-dir` to keep login state and reports outside the copied skill:
-
-```bash
-python scripts/one_click_review.py --data-dir D:\creator-analytics-data
-```
-
-Do not copy a live user's browser profile to an untrusted machine. Prefer a fresh login in the target environment.
-
-## GitHub Update Rule
-
-When updating the public GitHub repository, always update CHANGELOG.md in the same commit. The changelog entry must explain:
-
-- what was optimized
-- why the optimization matters to the creator workflow
-- which files or workflow areas changed
-- what validation was run
-- whether privacy-sensitive runtime data was excluded
-
-Do not rely on the commit message alone. The changelog is the user-facing record of skill evolution and must be readable by another agent before it runs or modifies the skill.
-
-## Runtime State
-
-Runtime data is private and should not be committed:
-
-- `data/browser/` stores persistent browser profiles and login state.
-- `data/cookies/` stores Playwright storage state snapshots.
-- `data/history/` stores account historical performance.
-- `data/output/` stores JSON analysis and Markdown reports.
-- `data/logs/` stores scheduled-task logs.
-
-First run on a new machine or new data directory may require:
-
-```bash
-python scripts/one_click_review.py --headed
-```
-
-After successful login, later runs should reuse the saved browser state. If a later run detects expired login state, `run_all.py` will retry the failed platform once with `--headed` unless `--headed`, `--dry-run`, or `--no-auto-login` is already set.
-
-WeChat Official Account uses data/browser/wechat_profile/ as the primary login state so the backend session survives better than storage-state cookies alone. Cookie JSON remains a diagnostic backup; if profile state does not exist, run headed once to establish wechat_profile.
-
-When auto-login is enabled, run_all.py runs WeChat collection with --headed first because mp.weixin.qq.com may challenge headless browser sessions even when the persistent profile exists. --dry-run, explicit --headed, and --no-auto-login keep their normal behavior.
-
-WeChat empty results must include collection_status, empty_reason, and login_status. Treat collection_status=empty with empty_reason=no_matching_date or empty_list_visible as a likely confirmed no-new-publish result. Treat list_unreadable, login_required, target_date_visible_but_parse_failed, backend_not_confirmed, and dry_run/skipped as not enough evidence to claim no publish.
-
-After a headed/manual WeChat login, the collector must verify that the page actually reaches the backend collection page. If it still shows the login page, set login_status=manual_login_not_accepted, collection_status=login_required, and fail the platform collection; do not save it as a successful empty result.
-
-If WeChat shows the dead-end "请重新登录" page, the collector should navigate to the explicit WeChat login entry before waiting for scan login. If the scan-login entry cannot be opened, fail fast with collection_status=login_required instead of waiting until timeout.
-
-If Playwright cannot launch the WeChat persistent profile because another browser window is already using it, save a structured failed result with empty_reason=browser_profile_locked and tell the user to close the existing WeChat collection browser before retrying. Do not emit an unhandled traceback as the final user-facing result.
-
-Because WeChat is already run with a visible browser when auto-login is enabled, the scheduler must not retry the same WeChat collection a second time with --headed after that headed attempt fails.
-
-WeChat login success must be based on backend evidence, not merely "the page no longer looks like a login page." Wait for backend text such as 首页 / 发表记录 / 内容管理 or backend URLs such as cgi-bin/appmsgpublish before continuing.
-
-Treat WeChat collection_status=list_unreadable or empty_reason=backend_not_confirmed as a failed/uncertain collection, not as no-new-publish. Platform summaries must say collection failed or unconfirmed.
-
-## Validation
-
-After copying or editing this skill, run:
-
-```bash
-python scripts/validate_skill.py
-python -m unittest discover -s tests
-```
-
-If Playwright is missing:
-
-```bash
-python -m pip install playwright
-python -m playwright install chromium
-```
+| Topic | Path |
+| 抖音发布 | `references/douyin-publish.md` |
+| 平台排错 | `references/platform_notes.md` |
+| 优化日志 | `references/darwin-optimization-v2.md` |
+| 验证 | `python scripts/validate_skill.py` |

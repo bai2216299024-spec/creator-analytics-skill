@@ -181,10 +181,16 @@ def scrape_wechat(
                     result["error"] = f"微信公众号列表不可确认：{result.get('empty_reason') or result.get('collection_status')}"
                 print(f"📭 公众号未抓到目标日期内容：{empty_status.get('empty_reason')}")
         except Exception as e:
+            emsg = str(e)
             if result.get("collection_status") == "pending":
                 result["collection_status"] = "failed"
-            result["error"] = str(e)
-            print(f"❌ 微信公众号采集异常: {e}")
+            result["error"] = emsg
+            if "Target page" in emsg or "context or browser has been closed" in emsg:
+                result["error"] += " — 微信浏览器页面意外关闭，请检查是否有其他程序占用 browser profile"
+                print(f"❌ 微信公众号采集异常（页面关闭）: {emsg}")
+                print(f"   ➜ 建议：关闭其他微信采集窗口，然后单独运行: --platform wechat --headed")
+            else:
+                print(f"❌ 微信公众号采集异常: {e}")
         finally:
             context.close()
     return result
@@ -270,6 +276,8 @@ def mark_browser_launch_failure(result: dict, error: Exception):
     result["login_status"] = "browser_launch_failed"
     if "user data" in message.lower() or "profile" in message.lower() or "Target page" in message:
         result["error"] = "微信公众号浏览器 profile 可能已被另一个窗口占用，请关闭已打开的公众号采集浏览器后重试"
+    elif "connection refused" in message.lower() or "closed" in message.lower():
+        result["error"] = "微信公众号浏览器连接断开，请检查浏览器是否有异常崩溃"
     else:
         result["error"] = f"微信公众号浏览器启动失败: {message}"
 
@@ -376,9 +384,22 @@ def open_login_entry(page):
 def wait_until_logged_in(page, timeout_ms: int):
     deadline = datetime.datetime.now() + datetime.timedelta(milliseconds=timeout_ms)
     while datetime.datetime.now() < deadline:
-        if is_backend_page(page):
-            return
-        page.wait_for_timeout(2000)
+        try:
+            if is_backend_page(page):
+                return
+            page.wait_for_timeout(2000)
+        except PlaywrightTimeout:
+            # 检查页面是否仍然可用
+            try:
+                page.title()
+            except Exception:
+                raise RuntimeError("微信公众号页面已关闭（可能是浏览器崩溃或 profile 被占用），请关闭其他微信采集窗口后重试")
+        except Exception as e:
+            # 捕获页面导航/关闭等异常
+            emsg = str(e)
+            if "Target page" in emsg or "browser has been closed" in emsg or "context" in emsg.lower():
+                raise RuntimeError(f"微信公众号浏览器页面意外关闭: {e}")
+            raise
     raise PlaywrightTimeout("等待微信公众号扫码登录超时")
 
 
